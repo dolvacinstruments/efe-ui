@@ -14,6 +14,7 @@ _SEP_W = 6
 _ARROW_H = 8
 _DIGIT_H = 22
 _PAD = 0
+_SIGN_W = 8
 
 
 class Readout(QWidget):
@@ -21,6 +22,8 @@ class Readout(QWidget):
         self,
         integer_digits: int = 1,
         decimal_places: int = 3,
+        min_value: float = -9.999,
+        max_value: float = 9.999,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -28,14 +31,18 @@ class Readout(QWidget):
         self._decimal_places = decimal_places
         self._scale = 10**decimal_places
         self._total_digit_cols = integer_digits + decimal_places
-        self._min_raw = 0
-        self._max_raw = 2500
+        self._min_raw = round(min_value * self._scale)
+        self._max_raw = round(max_value * self._scale)
         self._raw = 0
 
         self._font = QFont("monospace", 12)
         self._font.setBold(True)
 
-        total_w = self._total_digit_cols * _COL_W + (self._total_digit_cols - 1) * _PAD
+        total_w = (
+            _SIGN_W
+            + self._total_digit_cols * _COL_W
+            + (self._total_digit_cols - 1) * _PAD
+        )
         if decimal_places > 0:
             total_w += _SEP_W
         total_h = _ARROW_H * 2 + _DIGIT_H
@@ -51,11 +58,19 @@ class Readout(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         color = self.palette().text().color()
+        araw = abs(self._raw)
+
+        # sign
+        sign = "-" if self._raw < 0 else ""
+        sign_rect = QRectF(0.0, float(_ARROW_H), float(_SIGN_W), float(_DIGIT_H))
+        p.setPen(color)
+        p.setFont(self._font)
+        p.drawText(sign_rect, Qt.AlignmentFlag.AlignCenter, sign)
 
         for col in range(self._total_digit_cols):
             cx = self._col_x(col)
             scale = 10 ** (self._total_digit_cols - 1 - col)
-            digit = (self._raw // scale) % 10
+            digit = (araw // scale) % 10
 
             digit_rect = QRectF(
                 cx,
@@ -82,13 +97,13 @@ class Readout(QWidget):
         p.end()
 
     def _col_x(self, col: int) -> float:
-        x = col * (_COL_W + _PAD)
+        x = _SIGN_W + col * (_COL_W + _PAD)
         if self._decimal_places > 0 and col >= self._integer_digits:
             x += _SEP_W
         return float(x)
 
     def _sep_x(self) -> float:
-        return float(self._integer_digits * (_COL_W + _PAD) - _PAD // 2)
+        return float(_SIGN_W + self._integer_digits * (_COL_W + _PAD) - _PAD // 2)
 
 
 class DigitEdit(QWidget):
@@ -100,11 +115,14 @@ class DigitEdit(QWidget):
     _ARROW_H = _ARROW_H
     _DIGIT_H = _DIGIT_H
     _PAD = _PAD
+    _SIGN_W = _SIGN_W
 
     def __init__(
         self,
         integer_digits: int = 1,
         decimal_places: int = 3,
+        min_value: float = 0.0,
+        max_value: float = 2.5,
         initial_value: float = 0.0,
         parent: QWidget | None = None,
     ) -> None:
@@ -113,8 +131,8 @@ class DigitEdit(QWidget):
         self._decimal_places = decimal_places
         self._scale = 10**decimal_places
         self._total_digit_cols = integer_digits + decimal_places
-        self._min_raw = 0
-        self._max_raw = 2500
+        self._min_raw = round(min_value * self._scale)
+        self._max_raw = round(max_value * self._scale)
         self._hovered_col: int | None = None
         self._cursor_col = 0
         self._cursor_visible = False
@@ -125,7 +143,8 @@ class DigitEdit(QWidget):
         self._font.setBold(True)
 
         total_w = (
-            self._total_digit_cols * self._COL_W
+            self._SIGN_W
+            + self._total_digit_cols * self._COL_W
             + (self._total_digit_cols - 1) * self._PAD
         )
         if decimal_places > 0:
@@ -147,7 +166,10 @@ class DigitEdit(QWidget):
         return self._value
 
     def set_value(self, value: float) -> None:
-        self._value = max(0.0, min(value, self._max_raw / self._scale))
+        self._value = max(
+            self._min_raw / self._scale,
+            min(value, self._max_raw / self._scale),
+        )
         self.value_changed.emit(self._value)
         self.update()
 
@@ -158,13 +180,17 @@ class DigitEdit(QWidget):
         return 10 ** (self._total_digit_cols - 1 - col)
 
     def _col_x(self, col: int) -> float:
-        x = col * (self._COL_W + self._PAD)
+        x = self._SIGN_W + col * (self._COL_W + self._PAD)
         if self._decimal_places > 0 and col >= self._integer_digits:
             x += self._SEP_W
         return float(x)
 
     def _sep_x(self) -> float:
-        return float(self._integer_digits * (self._COL_W + self._PAD) - self._PAD // 2)
+        return float(
+            self._SIGN_W
+            + self._integer_digits * (self._COL_W + self._PAD)
+            - self._PAD // 2
+        )
 
     def _col_at(self, x: float) -> int | None:
         for col in range(self._total_digit_cols):
@@ -249,10 +275,12 @@ class DigitEdit(QWidget):
         if Qt.Key.Key_0 <= key <= Qt.Key.Key_9:
             self._cursor_visible = True
             digit = key - Qt.Key.Key_0
-            raw = self._raw()
+            raw = abs(self._raw())
             scale = self._scale_for_col(self._cursor_col)
             old = (raw // scale) % 10
             new_raw = raw - old * scale + digit * scale
+            if self._raw() < 0:
+                new_raw = -new_raw
             if new_raw > self._max_raw:
                 new_raw = self._max_raw
             self._set_raw(new_raw)
@@ -263,11 +291,17 @@ class DigitEdit(QWidget):
                 self.edit_committed.emit()
             self.update()
         elif key == Qt.Key.Key_Backspace or key == Qt.Key.Key_Delete:
-            raw = self._raw()
+            raw = abs(self._raw())
             scale = self._scale_for_col(self._cursor_col)
-            self._set_raw(raw - ((raw // scale) % 10) * scale)
+            new_raw = raw - ((raw // scale) % 10) * scale
+            if self._raw() < 0:
+                new_raw = -new_raw
+            self._set_raw(new_raw)
             if self._cursor_col > 0:
                 self._cursor_col -= 1
+            self._cursor_visible = True
+        elif key == Qt.Key.Key_Minus:
+            self._set_raw(-self._raw())
             self._cursor_visible = True
         elif key == Qt.Key.Key_Left:
             if self._cursor_col > 0:
@@ -301,11 +335,21 @@ class DigitEdit(QWidget):
 
         color = self.palette().text().color()
         raw = self._raw()
+        araw = abs(raw)
+
+        # sign
+        sign = "-" if raw < 0 else ""
+        sign_rect = QRectF(
+            0.0, float(self._ARROW_H), float(self._SIGN_W), float(self._DIGIT_H)
+        )
+        p.setPen(color)
+        p.setFont(self._font)
+        p.drawText(sign_rect, Qt.AlignmentFlag.AlignCenter, sign)
 
         for col in range(self._total_digit_cols):
             cx = self._col_x(col)
             scale = self._scale_for_col(col)
-            digit = (raw // scale) % 10
+            digit = (araw // scale) % 10
             hovered = col == self._hovered_col
 
             digit_rect = QRectF(
