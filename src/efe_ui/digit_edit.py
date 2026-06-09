@@ -287,6 +287,11 @@ class DigitEdit(QWidget):
             self._cursor_col = self._total_digit_cols - 1
             self._cursor_visible = True
             self.update()
+        elif key == Qt.Key.Key_Return or key == Qt.Key.Key_Enter:
+            self.edit_committed.emit()
+            self._cursor_col = 0
+            self._cursor_visible = False
+            self.update()
         else:
             super().keyPressEvent(event)
 

@@ -1,4 +1,4 @@
-from PySide6.QtCore import QTimer, Signal, Slot
+from PySide6.QtCore import QSettings, QTimer, Signal, Slot
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -58,10 +58,14 @@ class MainWindow(QMainWindow):
         layout = QHBoxLayout()
         layout.setSpacing(8)
 
+        settings = QSettings("efe", "efe-ui")
+        saved_ip = str(settings.value("last_ip", "192.168.2.123"))
+        saved_port = int(str(settings.value("last_port", "8080")))
+
         layout.addWidget(QLabel("IP Address:"))
 
         self._ip_input = QLineEdit()
-        self._ip_input.setText("192.168.2.123")
+        self._ip_input.setText(str(saved_ip))
         self._ip_input.setMaximumWidth(160)
         layout.addWidget(self._ip_input)
 
@@ -69,7 +73,7 @@ class MainWindow(QMainWindow):
 
         self._port_input = QSpinBox()
         self._port_input.setRange(1, 65535)
-        self._port_input.setValue(8080)
+        self._port_input.setValue(saved_port)
         self._port_input.setMaximumWidth(90)
         layout.addWidget(self._port_input)
 
@@ -136,6 +140,9 @@ class MainWindow(QMainWindow):
             self._status_label.setProperty("connected", False)
             self._connect_btn.setEnabled(True)
             return
+
+        QSettings("efe", "efe-ui").setValue("last_ip", host)
+        QSettings("efe", "efe-ui").setValue("last_port", port)
 
         self._poll_timer.start(_POLL_INTERVAL_MS)
         self._set_timer.start(_POLL_INTERVAL_MS)
