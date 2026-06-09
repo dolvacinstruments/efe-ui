@@ -1,10 +1,10 @@
 from PySide6.QtCore import Signal, Slot
 from PySide6.QtWidgets import (
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
-    QVBoxLayout,
     QWidget,
 )
 
@@ -18,6 +18,9 @@ _WRITE_VARIABLES = [
     "CURRENT_CATHODE",
 ]
 
+_LABEL_WIDTH = 180
+_PAD = 12
+
 
 class Panel(QWidget):
     set_clicked = Signal(int)
@@ -25,73 +28,66 @@ class Panel(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
+        grid = QGridLayout(self)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(_PAD)
+        grid.setVerticalSpacing(6)
 
-        layout.addWidget(self._build_measurements())
-        layout.addWidget(self._build_setpoints())
-
-    def _build_measurements(self) -> QWidget:
-        w = QWidget()
-        layout = QVBoxLayout(w)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(4)
-
-        header = QHBoxLayout()
+        # header row
         self._read_dot = QLabel("●")
-        header.addWidget(self._read_dot)
         self._read_dot.hide()
-        header.addWidget(QLabel("Measurements"))
-        header.addStretch()
-        layout.addLayout(header)
+        measure_header = QHBoxLayout()
+        measure_header.setSpacing(4)
+        measure_header.addWidget(self._read_dot)
+        measure_header.addWidget(QLabel("Measurements"))
+        measure_header.addStretch()
+
+        setpoint_header = QHBoxLayout()
+        setpoint_header.addWidget(QLabel("Setpoints"))
+        setpoint_header.addStretch()
+
+        grid.addLayout(measure_header, 0, 0)
+        grid.addLayout(setpoint_header, 0, 1)
 
         self._read_displays: list[QLineEdit] = []
+        self._digit_edits: list[DigitEdit] = []
+        self._set_buttons: list[QPushButton] = []
 
-        for name in _READ_VARIABLES:
-            row = QHBoxLayout()
-            row.setSpacing(4)
-            row.addWidget(QLabel(f"{name}:"))
+        for i in range(len(_READ_VARIABLES)):
+            # measurement cell
+            measure_row = QHBoxLayout()
+            measure_row.setSpacing(8)
+            rlabel = QLabel(f"{_READ_VARIABLES[i]}:")
+            rlabel.setFixedWidth(_LABEL_WIDTH)
+            measure_row.addWidget(rlabel)
             display = QLineEdit()
             display.setReadOnly(True)
             display.setPlaceholderText("—")
             self._read_displays.append(display)
-            row.addWidget(display, stretch=1)
-            layout.addLayout(row)
+            measure_row.addWidget(display, stretch=1)
+            grid.addLayout(measure_row, i + 1, 0)
 
-        layout.addStretch()
-        return w
-
-    def _build_setpoints(self) -> QWidget:
-        w = QWidget()
-        layout = QVBoxLayout(w)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(4)
-
-        header = QHBoxLayout()
-        header.addWidget(QLabel("Setpoints"))
-        header.addStretch()
-        layout.addLayout(header)
-
-        self._digit_edits: list[DigitEdit] = []
-        self._set_buttons: list[QPushButton] = []
-
-        for i, name in enumerate(_WRITE_VARIABLES):
-            row = QHBoxLayout()
-            row.setSpacing(4)
-            row.addWidget(QLabel(f"{name}:"))
+            # setpoint cell
+            setpoint_row = QHBoxLayout()
+            setpoint_row.setSpacing(8)
+            slabel = QLabel(f"{_WRITE_VARIABLES[i]}:")
+            slabel.setFixedWidth(_LABEL_WIDTH)
+            setpoint_row.addWidget(slabel)
             de = DigitEdit(integer_digits=1, decimal_places=3)
             self._digit_edits.append(de)
-            row.addWidget(de)
+            setpoint_row.addWidget(de)
+            setpoint_row.addSpacing(8)
             btn = QPushButton("Set")
+            btn.setFixedWidth(40)
             btn.clicked.connect(self._make_set_slot(i))
             self._set_buttons.append(btn)
-            row.addWidget(btn)
-            row.addStretch()
-            layout.addLayout(row)
+            setpoint_row.addWidget(btn)
+            setpoint_row.addStretch()
+            grid.addLayout(setpoint_row, i + 1, 1)
 
-        layout.addStretch()
-        return w
+        grid.setRowStretch(len(_READ_VARIABLES) + 1, 1)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
 
     def _make_set_slot(self, index: int):
         @Slot()
