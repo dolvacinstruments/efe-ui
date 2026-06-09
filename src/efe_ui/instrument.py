@@ -1,4 +1,5 @@
 import pyvisa
+from typing import cast
 
 
 class Instrument:
@@ -19,11 +20,14 @@ class Instrument:
     def connect(self, host: str, port: int = 5025, timeout: int = 5000) -> None:
         self.rm = pyvisa.ResourceManager("@py")
         resource_string = f"TCPIP0::{host}::{port}::SOCKET"
-        self.resource = self.rm.open_resource(
-            resource_string,
-            read_termination="\n",
-            write_termination="\n",
-            timeout=timeout,
+        self.resource = cast(
+            pyvisa.resources.MessageBasedResource,
+            self.rm.open_resource(
+                resource_string,
+                read_termination="\n",
+                write_termination="\n",
+                timeout=timeout,
+            ),
         )
         self._address = host
         self._connected = True

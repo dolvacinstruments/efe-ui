@@ -246,9 +246,9 @@ class DigitEdit(QWidget):
             return
 
         key = event.key()
-        if Qt.Key_0 <= key <= Qt.Key_9:
+        if Qt.Key.Key_0 <= key <= Qt.Key.Key_9:
             self._cursor_visible = True
-            digit = key - Qt.Key_0
+            digit = key - Qt.Key.Key_0
             raw = self._raw()
             scale = self._scale_for_col(self._cursor_col)
             old = (raw // scale) % 10
@@ -262,28 +262,28 @@ class DigitEdit(QWidget):
                 self._cursor_visible = False
                 self.edit_committed.emit()
             self.update()
-        elif key == Qt.Key_Backspace or key == Qt.Key_Delete:
+        elif key == Qt.Key.Key_Backspace or key == Qt.Key.Key_Delete:
             raw = self._raw()
             scale = self._scale_for_col(self._cursor_col)
             self._set_raw(raw - ((raw // scale) % 10) * scale)
             if self._cursor_col > 0:
                 self._cursor_col -= 1
             self._cursor_visible = True
-        elif key == Qt.Key_Left:
+        elif key == Qt.Key.Key_Left:
             if self._cursor_col > 0:
                 self._cursor_col -= 1
                 self._cursor_visible = True
                 self.update()
-        elif key == Qt.Key_Right:
+        elif key == Qt.Key.Key_Right:
             if self._cursor_col < self._total_digit_cols - 1:
                 self._cursor_col += 1
                 self._cursor_visible = True
                 self.update()
-        elif key == Qt.Key_Home:
+        elif key == Qt.Key.Key_Home:
             self._cursor_col = 0
             self._cursor_visible = True
             self.update()
-        elif key == Qt.Key_End:
+        elif key == Qt.Key.Key_End:
             self._cursor_col = self._total_digit_cols - 1
             self._cursor_visible = True
             self.update()
