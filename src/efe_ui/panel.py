@@ -57,7 +57,7 @@ class Panel(QWidget):
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
             )
             measure_row.addWidget(rlabel)
-            ro = Readout(integer_digits=1, decimal_places=3)
+            ro = Readout(integer_digits=1, decimal_places=4)
             self._readouts.append(ro)
             measure_row.addWidget(ro)
             measure_row.addStretch()
