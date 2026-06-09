@@ -36,6 +36,10 @@ class MainWindow(QMainWindow):
         self._poll_timer = QTimer()
         self._poll_timer.timeout.connect(self._poll_reads)
 
+        self._set_timer = QTimer()
+        self._set_timer.timeout.connect(self._flush_set)
+        self._pending_sets: dict[str, float] = {}
+
         central = QWidget()
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
@@ -84,28 +88,32 @@ class MainWindow(QMainWindow):
     def _on_set(self, index: int) -> None:
         name = _WRITE_VARIABLES[index]
         value = self._panel.digit_edit(index).value()
-        try:
-            self._instrument.write(f"SOURCE:{name} {value}")
-        except Exception:
-            pass
+        self._pending_sets[name] = value
+
+    @Slot()
+    def _flush_set(self) -> None:
+        if self._pending_sets:
+            name, value = self._pending_sets.popitem()
+            try:
+                self._instrument.write(f"SOURCE:{name} {value}")
+            except Exception:
+                pass
 
     @Slot()
     def _poll_reads(self) -> None:
-        all_ok = True
         for i, name in enumerate(_READ_VARIABLES):
             try:
                 value = self._instrument.query(f"MEASURE:{name}?")
-                self._panel.update_readout(i, value, True)
+                self._panel.update_readout(i, value)
             except Exception:
-                self._panel.update_readout(i, "Error", False)
-                all_ok = False
-        self._panel.set_all_read_ok(all_ok)
+                self._panel.update_readout(i, "0.0")
 
     @Slot()
     def _toggle_connection(self) -> None:
         if self._instrument.connected:
             self._instrument.disconnect()
             self._poll_timer.stop()
+            self._set_timer.stop()
             self.status_changed.emit(False)
         else:
             self._connect()
@@ -130,6 +138,8 @@ class MainWindow(QMainWindow):
             return
 
         self._poll_timer.start(_POLL_INTERVAL_MS)
+        self._set_timer.start(_POLL_INTERVAL_MS)
+        self._pending_sets.clear()
         self.status_changed.emit(True)
 
     @Slot(bool)
