@@ -14,5 +14,5 @@ class MainWindow(QMainWindow):
         container = QWidget(self)
         self.setCentralWidget(container)
         layout = QHBoxLayout(container)
-        number_widget = NumberWidget(digit_count=4, point_position=1, min_value=0, max_value=120, parent=self)
+        number_widget = NumberWidget(digit_count=4, point_position=1, min_value=-120, max_value=120, parent=self)
         layout.addWidget(number_widget)

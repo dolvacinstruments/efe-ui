@@ -25,7 +25,7 @@ class NumberWidget(QWidget):
         self,
         digit_count: int = 3,
         point_position: int | None = None,
-        min_value: float = 0,
+        min_value: float = -123,
         max_value: float = 456,
         parent: QWidget | None = None,
     ) -> None:
@@ -34,6 +34,7 @@ class NumberWidget(QWidget):
         self.digit_count = digit_count
         self.point_position = point_position
         self.digits: list[DigitWidget] = []
+        self.sign_label: QLabel | None = None
         self.value: float = 0
         self.min_value = min_value
         self.max_value = max_value
@@ -41,6 +42,8 @@ class NumberWidget(QWidget):
         self._selected_digit: int | None = None
 
         self.setup_ui()
+
+        self.set_value(0)
 
     def setup_ui(self) -> None:
         layout = QHBoxLayout(self)
@@ -50,6 +53,9 @@ class NumberWidget(QWidget):
         for i in range(self.digit_count):
             digit_widget = DigitWidget(self, i)
             self.digits.append(digit_widget)
+
+        self.sign_label = self.create_sign()
+        layout.addWidget(self.sign_label, alignment=Qt.AlignmentFlag.AlignCenter)
 
         for i, digit_widget in enumerate(reversed(self.digits)):
             if self.point_position is not None and i == self.digit_count - self.point_position:
@@ -67,6 +73,17 @@ class NumberWidget(QWidget):
         dot_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         return dot_label
 
+    def create_sign(self) -> QLabel:
+        sign_label = QLabel("-", self)
+        font = sign_label.font()
+        font.setPointSize(DIGIT_FONT_SIZE)
+        sign_label.setFont(font)
+        sign_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        retain_policy = sign_label.sizePolicy()
+        retain_policy.setRetainSizeWhenHidden(True)
+        sign_label.setSizePolicy(retain_policy)
+        return sign_label
+
     def calculate_multiplier(self, digit_index: int) -> float:
         if self.point_position is not None:
             return 10 ** (digit_index - self.point_position)
@@ -78,6 +95,17 @@ class NumberWidget(QWidget):
         for i, digit_widget in enumerate(self.digits):
             digit_value = int(abs(value) / self.calculate_multiplier(i)) % 10
             digit_widget.set_value(digit_value)
+
+        if self.sign_label is None:
+            return
+        if value < 0:
+            self.sign_label.setVisible(True)
+        else:
+            self.sign_label.setVisible(False)
+
+        event = NumberChangedEvent(value)
+        if (parent := self.parent()) is not None:
+            QApplication.postEvent(parent, event)
 
     def customEvent(self, event: QEvent) -> None:
         if isinstance(event, DigitEvent):
@@ -140,6 +168,14 @@ class NumberWidget(QWidget):
                 self.clearFocus()
         else:
             super().keyPressEvent(event)
+
+
+class NumberChangedEvent(QEvent):
+    EVENT_TYPE = QEvent.Type(QEvent.registerEventType())
+
+    def __init__(self, value: float) -> None:
+        super().__init__(self.EVENT_TYPE)
+        self.value = value
 
 
 class DigitWidget(QWidget):
