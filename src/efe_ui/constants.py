@@ -1,0 +1,8 @@
+DIGIT_FONT_SIZE = 20
+TITLE_BAR_FONT_SIZE = 12
+
+ORANGE = "#ed8002"
+BLUE = "#0270ed"
+MAGENTA = "#ed02ed"
+VIOLET = "#9b12db"
+YELLOW = "#eded02"

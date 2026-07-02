@@ -1,22 +1,25 @@
 from enum import Enum
 
 from PySide6.QtCore import QEvent, Qt
-from PySide6.QtGui import QEnterEvent, QFocusEvent, QFontMetrics, QKeyEvent, QWheelEvent
+from PySide6.QtGui import QEnterEvent, QFocusEvent, QFontMetrics, QKeyEvent, QPainter, QPaintEvent, QWheelEvent
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
     QLabel,
     QLayout,
     QPushButton,
+    QStyle,
+    QStyleOption,
     QVBoxLayout,
     QWidget,
 )
+
+from .constants import DIGIT_FONT_SIZE
 
 _WIDTH = None
 _ARROW_HEIGHT = None
 _DIGIT_HEIGHT = None
 
-DIGIT_FONT_SIZE = 20
 ARROW_FONT_SIZE = 8
 
 
@@ -35,11 +38,11 @@ class NumberWidget(QWidget):
         self._digit_count = digit_count
         self._point_position = point_position
         self._digits: list[DigitWidget] = []
-        self._sign_label: QLabel | None = None
         self._value: float = 0
         self._min_value = min_value
         self._max_value = max_value
         self._editable = editable
+        self._disabled = False
 
         self._selected_digit: int | None = None
 
@@ -73,6 +76,7 @@ class NumberWidget(QWidget):
         font.setPointSize(DIGIT_FONT_SIZE)
         dot_label.setFont(font)
         dot_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        dot_label.setFixedWidth(_get_width())
         return dot_label
 
     def create_sign(self) -> QLabel:
@@ -129,12 +133,10 @@ class NumberWidget(QWidget):
 
     def focusInEvent(self, event: QFocusEvent) -> None:
         super().focusInEvent(event)
-        print(f"Focus in: {event}")
         self.select_digit(0)
 
     def focusOutEvent(self, event: QFocusEvent) -> None:
         super().focusOutEvent(event)
-        print(f"Focus out: {event}")
         self.clear_selection()
 
     def clear_selection(self) -> None:
@@ -171,6 +173,24 @@ class NumberWidget(QWidget):
         else:
             super().keyPressEvent(event)
 
+    def set_disabled(self, disabled: bool) -> None:
+        self._disabled = disabled
+        if self._disabled:
+            for digit in self._digits:
+                digit.set_value("-")
+            self._sign_label.setVisible(False)
+        else:
+            self.set_value(self._value)
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        opt = QStyleOption()
+        opt.initFrom(self)
+
+        painter = QPainter(self)
+        self.style().drawPrimitive(QStyle.PrimitiveElement.PE_Widget, opt, painter, self)
+
+        super().paintEvent(event)
+
 
 class NumberChangedEvent(QEvent):
     EVENT_TYPE = QEvent.Type(QEvent.registerEventType())
@@ -205,8 +225,8 @@ class DigitWidget(QWidget):
         layout.addWidget(self.digit_button, alignment=Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.down_button, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        if self._editable:
-            self.setCursor(Qt.CursorShape.SizeVerCursor)
+        # if self._editable:
+        # self.setCursor(Qt.CursorShape.SizeVerCursor)
 
     def create_button(self, text: str, is_arrow: bool = False) -> QPushButton:
         button = QPushButton(text, self)
@@ -248,8 +268,11 @@ class DigitWidget(QWidget):
             button.installEventFilter(self)
         return button
 
-    def set_value(self, value: int) -> None:
-        self.digit_button.setText(str(value))
+    def set_value(self, value: str | int) -> None:
+        if isinstance(value, int):
+            value = str(value)
+        value = value[0]
+        self.digit_button.setText(value)
 
     def send_digit_event(self, event_type: DigitEventType) -> None:
         event = DigitEvent(self._index, event_type)
