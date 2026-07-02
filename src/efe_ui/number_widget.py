@@ -27,17 +27,19 @@ class NumberWidget(QWidget):
         point_position: int | None = None,
         min_value: float = -123,
         max_value: float = 456,
+        editable: bool = True,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
 
-        self.digit_count = digit_count
-        self.point_position = point_position
-        self.digits: list[DigitWidget] = []
-        self.sign_label: QLabel | None = None
-        self.value: float = 0
-        self.min_value = min_value
-        self.max_value = max_value
+        self._digit_count = digit_count
+        self._point_position = point_position
+        self._digits: list[DigitWidget] = []
+        self._sign_label: QLabel | None = None
+        self._value: float = 0
+        self._min_value = min_value
+        self._max_value = max_value
+        self._editable = editable
 
         self._selected_digit: int | None = None
 
@@ -50,15 +52,15 @@ class NumberWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(1)
 
-        for i in range(self.digit_count):
-            digit_widget = DigitWidget(self, i)
-            self.digits.append(digit_widget)
+        for i in range(self._digit_count):
+            digit_widget = DigitWidget(self, i, editable=self._editable)
+            self._digits.append(digit_widget)
 
-        self.sign_label = self.create_sign()
-        layout.addWidget(self.sign_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        self._sign_label = self.create_sign()
+        layout.addWidget(self._sign_label, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        for i, digit_widget in enumerate(reversed(self.digits)):
-            if self.point_position is not None and i == self.digit_count - self.point_position:
+        for i, digit_widget in enumerate(reversed(self._digits)):
+            if self._point_position is not None and i == self._digit_count - self._point_position:
                 dot_label = self.create_dot()
                 layout.addWidget(dot_label, alignment=Qt.AlignmentFlag.AlignCenter)
             layout.addWidget(digit_widget, alignment=Qt.AlignmentFlag.AlignCenter)
@@ -85,30 +87,30 @@ class NumberWidget(QWidget):
         return sign_label
 
     def calculate_multiplier(self, digit_index: int) -> float:
-        if self.point_position is not None:
-            return 10 ** (digit_index - self.point_position)
+        if self._point_position is not None:
+            return 10 ** (digit_index - self._point_position)
         else:
             return 10**digit_index
 
     def set_value(self, value: float) -> None:
-        self.value = value
-        for i, digit_widget in enumerate(self.digits):
+        self._value = value
+        for i, digit_widget in enumerate(self._digits):
             digit_value = int(abs(value) / self.calculate_multiplier(i)) % 10
             digit_widget.set_value(digit_value)
 
-        if self.sign_label is None:
+        if self._sign_label is None:
             return
         if value < 0:
-            self.sign_label.setVisible(True)
+            self._sign_label.setVisible(True)
         else:
-            self.sign_label.setVisible(False)
+            self._sign_label.setVisible(False)
 
         event = NumberChangedEvent(value)
         if (parent := self.parent()) is not None:
             QApplication.postEvent(parent, event)
 
     def customEvent(self, event: QEvent) -> None:
-        if isinstance(event, DigitEvent):
+        if isinstance(event, DigitEvent) and self._editable:
             self.handle_digit_event(event.digit_index, event.update_type)
         else:
             super().customEvent(event)
@@ -116,11 +118,11 @@ class NumberWidget(QWidget):
     def handle_digit_event(self, digit_index: int, event_type: DigitEventType) -> None:
         mult = self.calculate_multiplier(digit_index)
         if event_type == DigitEventType.INCREMENT:
-            new_value = self.value + mult
-            self.set_value(min(new_value, self.max_value))
+            new_value = self._value + mult
+            self.set_value(min(new_value, self._max_value))
         elif event_type == DigitEventType.DECREMENT:
-            new_value = self.value - mult
-            self.set_value(max(new_value, self.min_value))
+            new_value = self._value - mult
+            self.set_value(max(new_value, self._min_value))
         elif event_type == DigitEventType.VALUE:
             self.setFocus()
             self.select_digit(digit_index)
@@ -136,19 +138,19 @@ class NumberWidget(QWidget):
         self.clear_selection()
 
     def clear_selection(self) -> None:
-        for digit in self.digits:
+        for digit in self._digits:
             digit.set_selected(False)
         self._selected_digit = None
 
     def select_digit(self, digit_index: int) -> None:
         self.clear_selection()
         self._selected_digit = digit_index
-        self.digits[digit_index].set_selected(True)
+        self._digits[digit_index].set_selected(True)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         if self._selected_digit is not None:
             if event.key() == Qt.Key.Key_Left:
-                if self._selected_digit < len(self.digits) - 1:
+                if self._selected_digit < len(self._digits) - 1:
                     self.select_digit(self._selected_digit + 1)
             elif event.key() == Qt.Key.Key_Right:
                 if self._selected_digit > 0:
@@ -160,9 +162,9 @@ class NumberWidget(QWidget):
             elif event.text().isdigit():
                 digit_value = int(event.text())
                 mult = self.calculate_multiplier(self._selected_digit)
-                current_digit_value = int(abs(self.value) / mult) % 10
-                new_value = self.value - (current_digit_value * mult) + (digit_value * mult)
-                self.set_value(min(max(new_value, self.min_value), self.max_value))
+                current_digit_value = int(abs(self._value) / mult) % 10
+                new_value = self._value - (current_digit_value * mult) + (digit_value * mult)
+                self.set_value(min(max(new_value, self._min_value), self._max_value))
             elif event.key() == Qt.Key.Key_Escape:
                 self.clear_selection()
                 self.clearFocus()
@@ -179,10 +181,11 @@ class NumberChangedEvent(QEvent):
 
 
 class DigitWidget(QWidget):
-    def __init__(self, parent: QWidget | None = None, index: int = 0, value: int = 0) -> None:
+    def __init__(self, parent: QWidget | None = None, index: int = 0, editable: bool = True) -> None:
         super().__init__(parent)
 
         self._index = index
+        self._editable = editable
         self._hovered_over = False
 
         layout = QVBoxLayout(self)
@@ -202,26 +205,28 @@ class DigitWidget(QWidget):
         layout.addWidget(self.digit_button, alignment=Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.down_button, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        self.setCursor(Qt.CursorShape.SizeVerCursor)
+        if self._editable:
+            self.setCursor(Qt.CursorShape.SizeVerCursor)
 
     def create_button(self, text: str, is_arrow: bool = False) -> QPushButton:
         button = QPushButton(text, self)
         button.setFlat(True)
-        button.setStyleSheet("""
-            QPushButton:hover {
-                color: palette(mid);
-            }
-            QPushButton:pressed {
-                color: palette(window-text);
-                background-color: transparent;
-                border: none;
-                padding: 0px;
-            }
-            QPushButton[selected="true"] {
-                background-color: palette(highlight);
-                border: 1px solid palette(highlight);
-            }
-        """)
+        if self._editable:
+            button.setStyleSheet("""
+                QPushButton:hover {
+                    color: palette(mid);
+                }
+                QPushButton:pressed {
+                    color: palette(window-text);
+                    background-color: transparent;
+                    border: none;
+                    padding: 0px;
+                }
+                QPushButton[selected="true"] {
+                    background-color: palette(highlight);
+                    border: 1px solid palette(highlight);
+                }
+            """)
         button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         button.setFixedWidth(_get_width())
         if is_arrow:
@@ -253,22 +258,25 @@ class DigitWidget(QWidget):
 
     def enterEvent(self, event: QEnterEvent) -> None:
         super().enterEvent(event)
-        self.up_button.setVisible(True)
-        self.down_button.setVisible(True)
-        self._hovered_over = True
+        if self._editable:
+            self.up_button.setVisible(True)
+            self.down_button.setVisible(True)
+            self._hovered_over = True
 
     def leaveEvent(self, event: QEvent) -> None:
         super().leaveEvent(event)
-        self.up_button.setVisible(False)
-        self.down_button.setVisible(False)
-        self._hovered_over = False
+        if self._editable:
+            self.up_button.setVisible(False)
+            self.down_button.setVisible(False)
+            self._hovered_over = False
 
     def wheelEvent(self, event: QWheelEvent) -> None:
-        delta = event.angleDelta().y()
-        if delta > 0:
-            self.send_digit_event(DigitEventType.INCREMENT)
-        elif delta < 0:
-            self.send_digit_event(DigitEventType.DECREMENT)
+        if self._editable:
+            delta = event.angleDelta().y()
+            if delta > 0:
+                self.send_digit_event(DigitEventType.INCREMENT)
+            elif delta < 0:
+                self.send_digit_event(DigitEventType.DECREMENT)
 
     def is_hovered_over(self) -> bool:
         return self._hovered_over
