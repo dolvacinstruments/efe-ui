@@ -1,7 +1,17 @@
 from dataclasses import dataclass
+from enum import Enum
+
+CHANNEL_COUNT = 4
 
 DIGIT_FONT_SIZE = 16
 TITLE_BAR_FONT_SIZE = 10
+
+
+class VariableType(Enum):
+    VOLTAGE_C = 1
+    CURRENT = 2
+    VOLTAGE_CE = 3
+    CURRENT_C = 4
 
 
 @dataclass

@@ -70,6 +70,9 @@ class NumberWidget(QWidget):
 
         layout.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
 
+    def get_value(self) -> float:
+        return self._value
+
     def create_dot(self) -> QLabel:
         dot_label = QLabel(".", self)
         font = dot_label.font()
@@ -97,6 +100,7 @@ class NumberWidget(QWidget):
             return 10**digit_index
 
     def set_value(self, value: float) -> None:
+        value = max(min(value, self._max_value), self._min_value)
         self._value = value
         for i, digit_widget in enumerate(self._digits):
             digit_value = int(abs(value) / self.calculate_multiplier(i)) % 10
@@ -109,7 +113,7 @@ class NumberWidget(QWidget):
         else:
             self._sign_label.setVisible(False)
 
-        event = NumberChangedEvent(value)
+        event = NumberChangedEvent(value, self)
         if (parent := self.parent()) is not None:
             QApplication.postEvent(parent, event)
 
@@ -195,9 +199,10 @@ class NumberWidget(QWidget):
 class NumberChangedEvent(QEvent):
     EVENT_TYPE = QEvent.Type(QEvent.registerEventType())
 
-    def __init__(self, value: float) -> None:
+    def __init__(self, value: float, source: QWidget) -> None:
         super().__init__(self.EVENT_TYPE)
         self.value = value
+        self.source = source
 
 
 class DigitWidget(QWidget):
