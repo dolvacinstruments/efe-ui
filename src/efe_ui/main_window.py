@@ -32,7 +32,7 @@ class MainWindow(QMainWindow):
 
         self.add_device_area(layout)
 
-        layout.addWidget(ChannelWidget(self, channel_number=None), alignment=Qt.AlignmentFlag.AlignHCenter)
+        layout.addWidget(ChannelWidget("Global", write_only=True), alignment=Qt.AlignmentFlag.AlignHCenter)
 
         layout.addStretch(1)
 

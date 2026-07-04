@@ -4,6 +4,7 @@ from enum import Enum
 CHANNEL_COUNT = 4
 
 DIGIT_FONT_SIZE = 16
+ARROW_FONT_SIZE = 8
 TITLE_BAR_FONT_SIZE = 10
 
 

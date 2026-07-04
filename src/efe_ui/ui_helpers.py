@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QLabel, QLineEdit, QPushButton, QSizePolicy
+from PySide6.QtWidgets import QLabel, QLineEdit, QPushButton, QSizePolicy, QWidget
 
 from efe_ui.constants import TITLE_BAR_FONT_SIZE
 
@@ -40,3 +40,17 @@ def create_title_bar_line_edit(placeholder: str) -> QLineEdit:
     width = line_edit.fontMetrics().horizontalAdvance(placeholder) + 20
     line_edit.setFixedWidth(width)
     return line_edit
+
+
+def set_font(widget: QWidget, font_size: int, bold: bool = False) -> None:
+    font = widget.font()
+    font.setPointSize(font_size)
+    font.setBold(bold)
+    widget.setFont(font)
+
+
+def get_text_width(widget: QWidget, text: str | list[str]) -> int:
+    metrics = widget.fontMetrics()
+    if isinstance(text, list):
+        return max(metrics.horizontalAdvance(t) for t in text)
+    return metrics.horizontalAdvance(text)

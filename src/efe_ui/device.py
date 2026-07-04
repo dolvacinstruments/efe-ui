@@ -18,7 +18,7 @@ class DeviceStatus(StrEnum):
 
 class Device(QObject):
     status_updated = Signal(DeviceStatus)
-    variable_updated = Signal(VariableType, float, int)
+    value_updated = Signal(VariableType, float, int)
 
     def __init__(self, ip: str) -> None:
         super().__init__()
@@ -56,16 +56,16 @@ class Device(QObject):
         self.timer.start(REFRESH_INTERVAL_MS)
 
     @Slot(bool, int)
-    def set_enabled(self, is_enabled: bool, channel: int) -> None:
+    def set_disabled(self, is_disabled: bool, channel: int) -> None:
         with QMutexLocker(self._device_mutex):
             if self._device is None:
                 self.status_updated.emit(DeviceStatus.ERROR)
                 return
-            if is_enabled:
-                self._device.write(f"OUTP{channel + 1} ON")
-            else:
+            if is_disabled:
                 self._device.write(f"OUTP{channel + 1} OFF")
-            self._is_enabled[channel] = is_enabled
+            else:
+                self._device.write(f"OUTP{channel + 1} ON")
+            self._is_enabled[channel] = not is_disabled
 
     @Slot(bool, int)
     def set_diode_mode(self, is_diode_mode: bool, channel: int) -> None:
@@ -116,13 +116,13 @@ class Device(QObject):
                     continue
                 try:
                     vc = float(self._device.query(f"MEAS{i + 1}:VOLTC?"))
-                    self.variable_updated.emit(VariableType.VOLTAGE_C, vc, i)
+                    self.value_updated.emit(VariableType.VOLTAGE_C, vc, i)
                     curr = float(self._device.query(f"MEAS{i + 1}:CURR?"))
-                    self.variable_updated.emit(VariableType.CURRENT, curr, i)
+                    self.value_updated.emit(VariableType.CURRENT, curr, i)
 
                     if not self._is_diode_mode[i]:
                         vce = float(self._device.query(f"MEAS{i + 1}:VOLTCE?"))
-                        self.variable_updated.emit(VariableType.VOLTAGE_CE, vce, i)
+                        self.value_updated.emit(VariableType.VOLTAGE_CE, vce, i)
 
                 except pyvisa.VisaIOError:
                     self.status_updated.emit(DeviceStatus.ERROR)
