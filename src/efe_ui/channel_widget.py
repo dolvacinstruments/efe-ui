@@ -1,4 +1,5 @@
 import copy
+from functools import partial
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -172,12 +173,10 @@ class ChannelWidget(QWidget):
         self.range_switch.state_changed.connect(self._change_is_high_range)
         self.mode_switch.state_changed.connect(self._change_is_diode_mode)
 
-        self.vc_set_widget.number_changed.connect(lambda value: self.value_changed.emit(VariableType.VOLTAGE_C, value))
-        self.i_set_widget.number_changed.connect(lambda value: self.value_changed.emit(VariableType.CURRENT, value))
-        self.vce_set_widget.number_changed.connect(
-            lambda value: self.value_changed.emit(VariableType.VOLTAGE_CE, value)
-        )
-        self.i_c_set_widget.number_changed.connect(lambda value: self.value_changed.emit(VariableType.CURRENT_C, value))
+        self.vc_set_widget.number_changed.connect(partial(self.value_changed.emit, VariableType.VOLTAGE_C))
+        self.i_set_widget.number_changed.connect(partial(self.value_changed.emit, VariableType.CURRENT))
+        self.vce_set_widget.number_changed.connect(partial(self.value_changed.emit, VariableType.VOLTAGE_CE))
+        self.i_c_set_widget.number_changed.connect(partial(self.value_changed.emit, VariableType.CURRENT_C))
 
     def _change_is_disabled(self, state: bool) -> None:
         self._is_disabled = state
@@ -227,7 +226,7 @@ class ChannelWidget(QWidget):
                 if widget is not None:
                     widget.setVisible(not hide)
 
-    def set_variable(self, variable_type: VariableType, value: float) -> None:
+    def set_measure_value(self, variable_type: VariableType, value: float) -> None:
         if variable_type == VariableType.VOLTAGE_C:
             self.vc_measure_widget.set_value(value)
         elif variable_type == VariableType.CURRENT:
@@ -236,6 +235,25 @@ class ChannelWidget(QWidget):
             self.vce_measure_widget.set_value(value)
         elif variable_type == VariableType.CURRENT_C:
             self.i_c_measure_widget.set_value(value)
+
+    def set_set_value(self, variable_type: VariableType, value: float) -> None:
+        if variable_type == VariableType.VOLTAGE_C:
+            self.vc_set_widget.set_value(value)
+        elif variable_type == VariableType.CURRENT:
+            self.i_set_widget.set_value(value)
+        elif variable_type == VariableType.VOLTAGE_CE:
+            self.vce_set_widget.set_value(value)
+        elif variable_type == VariableType.CURRENT_C:
+            self.i_c_set_widget.set_value(value)
+
+    def set_is_disabled(self, is_disabled: bool) -> None:
+        self.enable_switch.set_state(is_disabled)
+
+    def set_is_diode_mode(self, is_diode_mode: bool) -> None:
+        self.mode_switch.set_state(is_diode_mode)
+
+    def set_is_high_range(self, is_high_range: bool) -> None:
+        self.range_switch.set_state(is_high_range)
 
 
 ROW_LABEL_WIDTH: int | None = None

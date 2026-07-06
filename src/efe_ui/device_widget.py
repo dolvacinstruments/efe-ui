@@ -1,4 +1,6 @@
-from PySide6.QtCore import QMetaObject, Qt, QThread, Signal, Slot
+from functools import partial
+
+from PySide6.QtCore import QMetaObject, Qt, QThread, Slot
 from PySide6.QtWidgets import QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
 
 from efe_ui.channel_widget import (
@@ -10,28 +12,24 @@ from efe_ui.ui_helpers import create_title_bar_button, create_title_bar_label
 
 
 class DeviceWidget(QWidget):
-    value_changed = Signal(VariableType, float, int)
-    is_disabled_changed = Signal(bool, int)
-    is_high_range_changed = Signal(bool, int)
-    is_diode_mode_changed = Signal(bool, int)
-
     def __init__(self, device_name: str, ip: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._device_name = device_name
         self._ip = ip
         self._channel_widgets: list[ChannelWidget] = []
-        self.setup_device()
-        self.setup_ui()
-        self.connect_signals()
+        self._setup_device()
+        self._setup_ui()
+        self._connect_signals()
         QMetaObject.invokeMethod(self._device, "start_loop", Qt.ConnectionType.QueuedConnection)
 
-    def setup_device(self) -> None:
+    def _setup_device(self) -> None:
         self._device = Device(self._ip)
         self._thread = QThread(self)
         self._device.moveToThread(self._thread)
+        self._thread.started.connect(self._device.start_loop)
         self._thread.start()
 
-    def setup_ui(self) -> None:
+    def _setup_ui(self) -> None:
         self.setObjectName("device_widget")
         self.setStyleSheet("""
             #device_widget {
@@ -44,7 +42,7 @@ class DeviceWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        self.add_title_bar(layout)
+        self._add_title_bar(layout)
 
         ch_layout = QHBoxLayout()
         ch_layout.setContentsMargins(0, 0, 0, 0)
@@ -54,7 +52,7 @@ class DeviceWidget(QWidget):
             ch_layout.addWidget(channel_widget)
             self._channel_widgets.append(channel_widget)
 
-    def add_title_bar(self, layout: QVBoxLayout) -> None:
+    def _add_title_bar(self, layout: QVBoxLayout) -> None:
         title_bar = QWidget()
         layout.addWidget(title_bar, alignment=Qt.AlignmentFlag.AlignTop)
 
@@ -79,40 +77,54 @@ class DeviceWidget(QWidget):
         self._disconnect_button = create_title_bar_button("REMOVE")
         title_layout.addWidget(self._disconnect_button)
 
-    def connect_signals(self) -> None:
-        self._disconnect_button.clicked.connect(self.handle_disconnect)
-        for i, channel_widget in enumerate(self._channel_widgets):
-            channel_widget.value_changed.connect(
-                lambda variable_type, value, ch=i: self.value_changed.emit(variable_type, value, ch)
-            )
-            channel_widget.is_disabled_changed.connect(
-                lambda is_disabled, ch=i: self.is_disabled_changed.emit(is_disabled, ch)
-            )
-            channel_widget.is_high_range_changed.connect(
-                lambda is_high_range, ch=i: self.is_high_range_changed.emit(is_high_range, ch)
-            )
-            channel_widget.is_diode_mode_changed.connect(
-                lambda is_diode_mode, ch=i: self.is_diode_mode_changed.emit(is_diode_mode, ch)
-            )
-
-        self.is_diode_mode_changed.connect(self._device.set_diode_mode)
-        self.is_high_range_changed.connect(self._device.set_high_range)
-        self.is_disabled_changed.connect(self._device.set_disabled)
-
-        self._device.value_updated.connect(self.update_device_values)
+    def _connect_signals(self) -> None:
+        self._disconnect_button.clicked.connect(self._device.stop_worker)
+        self._device.value_updated.connect(self.set_measure_value)
         self._device.status_updated.connect(self.update_device_status)
+        self._thread.finished.connect(self._handle_thread_exit)
 
-    def handle_disconnect(self) -> None:
+        for i, channel_widget in enumerate(self._channel_widgets):
+            channel_widget.value_changed.connect(partial(self._device.set_value, i))
+            channel_widget.is_disabled_changed.connect(partial(self._device.set_disabled, i))
+            channel_widget.is_high_range_changed.connect(partial(self._device.set_high_range, i))
+            channel_widget.is_diode_mode_changed.connect(partial(self._device.set_diode_mode, i))
+
+    @Slot()
+    def _handle_thread_exit(self) -> None:
         self.setParent(None)
         self.deleteLater()
 
     @Slot(VariableType, float, int)
-    def update_device_values(self, variable_type: VariableType, value: float, channel: int) -> None:
+    def set_measure_value(self, variable_type: VariableType, value: float, channel: int) -> None:
         if channel < 0 or channel >= CHANNEL_COUNT:
             return
 
         channel_widget = self._channel_widgets[channel]
-        channel_widget.set_variable(variable_type, value)
+        channel_widget.set_measure_value(variable_type, value)
+
+    @Slot(VariableType, float, int)
+    def set_set_value(self, variable_type: VariableType, value: float, channel: int) -> None:
+        if channel < 0 or channel >= CHANNEL_COUNT:
+            raise ValueError(f"Channel {channel} is out of range. Must be between 0 and {CHANNEL_COUNT - 1}.")
+        self._channel_widgets[channel].set_set_value(variable_type, value)
+
+    @Slot(bool, int)
+    def set_is_disabled(self, is_disabled: bool, channel: int) -> None:
+        if channel < 0 or channel >= CHANNEL_COUNT:
+            raise ValueError(f"Channel {channel} is out of range. Must be between 0 and {CHANNEL_COUNT - 1}.")
+        self._channel_widgets[channel].set_is_disabled(is_disabled)
+
+    @Slot(bool, int)
+    def set_is_diode_mode(self, is_diode_mode: bool, channel: int) -> None:
+        if channel < 0 or channel >= CHANNEL_COUNT:
+            raise ValueError(f"Channel {channel} is out of range. Must be between 0 and {CHANNEL_COUNT - 1}.")
+        self._channel_widgets[channel].set_is_diode_mode(is_diode_mode)
+
+    @Slot(bool, int)
+    def set_is_high_range(self, is_high_range: bool, channel: int) -> None:
+        if channel < 0 or channel >= CHANNEL_COUNT:
+            raise ValueError(f"Channel {channel} is out of range. Must be between 0 and {CHANNEL_COUNT - 1}.")
+        self._channel_widgets[channel].set_is_high_range(is_high_range)
 
     @Slot(DeviceStatus)
     def update_device_status(self, status: DeviceStatus) -> None:

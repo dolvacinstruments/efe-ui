@@ -1,3 +1,5 @@
+from functools import partial
+
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
@@ -13,6 +15,7 @@ from PySide6.QtWidgets import (
 
 from efe_ui.add_device_dialog import AddDeviceDialog
 from efe_ui.channel_widget import ChannelWidget
+from efe_ui.constants import CHANNEL_COUNT
 from efe_ui.device_widget import DeviceWidget
 
 
@@ -32,7 +35,8 @@ class MainWindow(QMainWindow):
 
         self.add_device_area(layout)
 
-        layout.addWidget(ChannelWidget("Global", write_only=True), alignment=Qt.AlignmentFlag.AlignHCenter)
+        self._global_widget = ChannelWidget("Global", write_only=True)
+        layout.addWidget(self._global_widget, alignment=Qt.AlignmentFlag.AlignHCenter)
 
         layout.addStretch(1)
 
@@ -73,6 +77,12 @@ class MainWindow(QMainWindow):
         device_widget = DeviceWidget(name, ip, self)
         self.area_layout.addWidget(device_widget)
         self.scroll_area.updateGeometry()
+
+        for i in range(CHANNEL_COUNT):
+            self._global_widget.is_disabled_changed.connect(partial(device_widget.set_is_disabled, channel=i))
+            self._global_widget.is_diode_mode_changed.connect(partial(device_widget.set_is_diode_mode, channel=i))
+            self._global_widget.is_high_range_changed.connect(partial(device_widget.set_is_high_range, channel=i))
+            self._global_widget.value_changed.connect(partial(device_widget.set_set_value, channel=i))
 
 
 class FitScrollArea(QScrollArea):

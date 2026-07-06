@@ -14,6 +14,7 @@ class DeviceStatus(StrEnum):
     CONNECTED = "Connected"
     CANNOT_CONNECT = "Failed to connect"
     ERROR = "Error"
+    DISCONNECTED = "Disconnected"
 
 
 class Device(QObject):
@@ -55,8 +56,18 @@ class Device(QObject):
         self.timer.timeout.connect(self.poll_device)
         self.timer.start(REFRESH_INTERVAL_MS)
 
-    @Slot(bool, int)
-    def set_disabled(self, is_disabled: bool, channel: int) -> None:
+    @Slot()
+    def stop_worker(self) -> None:
+        with QMutexLocker(self._device_mutex):
+            self.timer.stop()
+            if self._device is not None:
+                self._device.close()
+                self._device = None
+            self.status_updated.emit(DeviceStatus.DISCONNECTED)
+            self.thread().quit()
+
+    @Slot(int, bool)
+    def set_disabled(self, channel: int, is_disabled: bool) -> None:
         with QMutexLocker(self._device_mutex):
             if self._device is None:
                 self.status_updated.emit(DeviceStatus.ERROR)
@@ -67,8 +78,8 @@ class Device(QObject):
                 self._device.write(f"OUTP{channel + 1} ON")
             self._is_enabled[channel] = not is_disabled
 
-    @Slot(bool, int)
-    def set_diode_mode(self, is_diode_mode: bool, channel: int) -> None:
+    @Slot(int, bool)
+    def set_diode_mode(self, channel: int, is_diode_mode: bool) -> None:
         with QMutexLocker(self._device_mutex):
             if self._device is None:
                 self.status_updated.emit(DeviceStatus.ERROR)
@@ -79,8 +90,8 @@ class Device(QObject):
                 self._device.write(f"FUNC{channel + 1} TRIODE")
             self._is_diode_mode[channel] = is_diode_mode
 
-    @Slot(bool, int)
-    def set_high_range(self, is_high_range: bool, channel: int) -> None:
+    @Slot(int, bool)
+    def set_high_range(self, channel: int, is_high_range: bool) -> None:
         with QMutexLocker(self._device_mutex):
             if self._device is None:
                 self.status_updated.emit(DeviceStatus.ERROR)
@@ -91,7 +102,8 @@ class Device(QObject):
                 self._device.write(f"RANGE{channel + 1} LOW")
 
     @Slot(int, VariableType, float)
-    def set_value(self, variable_type: VariableType, value: float, channel: int) -> None:
+    def set_value(self, channel: int, variable_type: VariableType, value: float) -> None:
+        print("device: set_value triggered")
         with QMutexLocker(self._device_mutex):
             if self._device is None:
                 self.status_updated.emit(DeviceStatus.ERROR)
@@ -142,3 +154,6 @@ class DebugDevice:
         elif "MEAS" in command and "CURR" in command:
             return str(random.uniform(0.0, 1.0))
         return "0.0"
+
+    def close(self) -> None:
+        print(f"DebugDevice({self._ip}): close()")
