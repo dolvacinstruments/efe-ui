@@ -1,6 +1,6 @@
 from functools import partial
 
-from PySide6.QtCore import QMetaObject, Qt, QThread, Slot
+from PySide6.QtCore import QMetaObject, Qt, QThread, Signal, Slot
 from PySide6.QtWidgets import QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
 
 from efe_ui.channel_widget import (
@@ -12,6 +12,8 @@ from efe_ui.ui_helpers import create_title_bar_button, create_title_bar_label
 
 
 class DeviceWidget(QWidget):
+    disconnect_requested = Signal()
+
     def __init__(self, device_name: str, ip: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._device_name = device_name
@@ -78,7 +80,8 @@ class DeviceWidget(QWidget):
         title_layout.addWidget(self._disconnect_button)
 
     def _connect_signals(self) -> None:
-        self._disconnect_button.clicked.connect(self._device.stop_worker)
+        self._disconnect_button.clicked.connect(self.disconnect_from_device)
+        self.disconnect_requested.connect(self._device.stop_worker)
         self._device.value_updated.connect(self.set_measure_value)
         self._device.status_updated.connect(self.update_device_status)
         self._thread.finished.connect(self._handle_thread_exit)
@@ -88,6 +91,10 @@ class DeviceWidget(QWidget):
             channel_widget.is_disabled_changed.connect(partial(self._device.set_disabled, i))
             channel_widget.is_high_range_changed.connect(partial(self._device.set_high_range, i))
             channel_widget.is_diode_mode_changed.connect(partial(self._device.set_diode_mode, i))
+
+    @Slot()
+    def disconnect_from_device(self) -> None:
+        self.disconnect_requested.emit()
 
     @Slot()
     def _handle_thread_exit(self) -> None:

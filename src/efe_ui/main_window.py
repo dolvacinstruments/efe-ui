@@ -17,6 +17,7 @@ from efe_ui.add_device_dialog import AddDeviceDialog
 from efe_ui.channel_widget import ChannelWidget
 from efe_ui.constants import CHANNEL_COUNT
 from efe_ui.device_widget import DeviceWidget
+from efe_ui.load_devices_dialog import LoadDevicesDialog
 
 
 class MainWindow(QMainWindow):
@@ -43,16 +44,29 @@ class MainWindow(QMainWindow):
     def setup_menu(self) -> None:
         menu_bar = self.menuBar()
         devices_menu = menu_bar.addMenu("Devices")
+
         add_device_action = QAction("Add Device...", self)
         add_device_action.setShortcut("Ctrl+N")
         add_device_action.triggered.connect(self.show_add_device_dialog)
         devices_menu.addAction(add_device_action)
+
+        load_devices_action = QAction("Add Devices from file...", self)
+        load_devices_action.triggered.connect(self.show_load_devices_dialog)
+        devices_menu.addAction(load_devices_action)
 
     def show_add_device_dialog(self) -> None:
         dialog = AddDeviceDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             name, ip = dialog.get_data()
             self.add_device_widget(ip, name)
+
+    def show_load_devices_dialog(self) -> None:
+        dialog = LoadDevicesDialog(self)
+        config = dialog.get_data()
+
+        if config is not None:
+            for device in config.root:
+                self.add_device_widget(device.name, device.ip)
 
     def add_device_area(self, layout: QHBoxLayout) -> None:
         self.scroll_area = FitScrollArea(self)
