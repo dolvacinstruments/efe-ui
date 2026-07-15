@@ -8,13 +8,14 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
+    "pydantic>=2.13.4",
     "pyside6>=6.8",
     "pyvisa>=1.14",
     "pyvisa-py>=0.7",
 ]
 
 [project.scripts]
-efe-ui = "efe_ui:main"
+efe-ui = "efe_ui.main:main"
 
 [build-system]
 requires = ["uv_build>=0.11.16,<0.12.0"]
@@ -25,3 +26,9 @@ dev = [
     "ruff>=0.15.16",
     "ty>=0.0.46",
 ]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "UP", "B", "SIM", "I", "ANN"]
