@@ -13,12 +13,12 @@ from PySide6.QtWidgets import (
 
 from efe_ui.constants import (
     DIGIT_FONT_SIZE,
-    I_C_HIGH_ROW,
-    I_C_LOW_ROW,
-    I_HIGH_ROW,
-    I_LOW_ROW,
+    IC_HIGH_ROW,
+    IC_LOW_ROW,
+    IE_HIGH_ROW,
+    IE_LOW_ROW,
     VC_ROW,
-    VCE_ROW,
+    VE_ROW,
     RowConfig,
     VariableType,
 )
@@ -114,14 +114,14 @@ class ChannelWidget(QWidget):
         self.vc_measure_widget, self.vc_set_widget = self._add_row(
             self.grid, 1, self._modify_row_config(VC_ROW, self._is_write_only)
         )
-        self.i_measure_widget, self.i_set_widget = self._add_row(
-            self.grid, 2, self._modify_row_config(I_HIGH_ROW, self._is_write_only)
+        self.ic_measure_widget, self.ic_set_widget = self._add_row(
+            self.grid, 2, self._modify_row_config(IC_HIGH_ROW, self._is_write_only)
         )
-        self.vce_measure_widget, self.vce_set_widget = self._add_row(
-            self.grid, 3, self._modify_row_config(VCE_ROW, self._is_write_only)
+        self.ve_measure_widget, self.ve_set_widget = self._add_row(
+            self.grid, 3, self._modify_row_config(VE_ROW, self._is_write_only)
         )
-        self.i_c_measure_widget, self.i_c_set_widget = self._add_row(
-            self.grid, 4, self._modify_row_config(I_C_HIGH_ROW, self._is_write_only)
+        self.ie_measure_widget, self.ie_set_widget = self._add_row(
+            self.grid, 4, self._modify_row_config(IE_HIGH_ROW, self._is_write_only)
         )
 
         self.set_row_hide(3, True, False)
@@ -144,7 +144,7 @@ class ChannelWidget(QWidget):
         grid.addWidget(label, row, 0, alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
         measure_widget = NumberWidget(
-            None, config.digit_count_measure, config.point_position_measure, -float('inf'), float("inf"), self
+            None, config.digit_count_measure, config.point_position_measure, -float("inf"), float("inf"), self
         )
         measure_widget.set_editable(False)
         if not config.readable:
@@ -174,39 +174,41 @@ class ChannelWidget(QWidget):
         self.mode_switch.state_changed.connect(self._change_is_diode_mode)
 
         self.vc_set_widget.number_changed.connect(partial(self.value_changed.emit, VariableType.VOLTAGE_C))
-        self.i_set_widget.number_changed.connect(partial(self.value_changed.emit, VariableType.CURRENT))
-        self.vce_set_widget.number_changed.connect(partial(self.value_changed.emit, VariableType.VOLTAGE_CE))
-        self.i_c_set_widget.number_changed.connect(partial(self.value_changed.emit, VariableType.CURRENT_C))
+        self.ic_set_widget.number_changed.connect(partial(self.value_changed.emit, VariableType.CURRENT_C))
+        self.ve_set_widget.number_changed.connect(partial(self.value_changed.emit, VariableType.VOLTAGE_E))
+        self.ie_set_widget.number_changed.connect(partial(self.value_changed.emit, VariableType.CURRENT_E))
 
     def _change_is_disabled(self, state: bool) -> None:
         self._is_disabled = state
         if self._is_disabled:
             self.vc_measure_widget.set_value(None)
-            self.i_measure_widget.set_value(None)
-            self.vce_measure_widget.set_value(None)
-            self.i_c_measure_widget.set_value(None)
+            self.ic_measure_widget.set_value(None)
+            self.ve_measure_widget.set_value(None)
+            self.ie_measure_widget.set_value(None)
         self.is_disabled_changed.emit(state)
 
     def _change_is_high_range(self, state: bool) -> None:
         self._is_high_range = state
         if self._is_high_range:
-            self.i_measure_widget.set_min_max(I_HIGH_ROW.minimum, I_HIGH_ROW.maximum)
-            self.i_set_widget.set_min_max(I_HIGH_ROW.minimum, I_HIGH_ROW.maximum)
-            self.i_c_measure_widget.set_min_max(I_C_HIGH_ROW.minimum, I_C_HIGH_ROW.maximum)
-            self.i_c_set_widget.set_min_max(I_C_HIGH_ROW.minimum, I_C_HIGH_ROW.maximum)
-            self.i_measure_widget.set_point_position(I_HIGH_ROW.point_position_measure)
-            self.i_set_widget.set_point_position(I_HIGH_ROW.point_position_set)
-            self.i_c_measure_widget.set_point_position(I_C_HIGH_ROW.point_position_measure)
-            self.i_c_set_widget.set_point_position(I_C_HIGH_ROW.point_position_set)
+            self.ic_measure_widget.set_point_position(IC_HIGH_ROW.point_position_measure)
+            self.ic_set_widget.set_point_position(IC_HIGH_ROW.point_position_set)
+            self.ie_measure_widget.set_point_position(IE_HIGH_ROW.point_position_measure)
+            self.ie_set_widget.set_point_position(IE_HIGH_ROW.point_position_set)
+
+            self.ic_measure_widget.set_min_max(IC_HIGH_ROW.minimum, IC_HIGH_ROW.maximum)
+            self.ic_set_widget.set_min_max(IC_HIGH_ROW.minimum, IC_HIGH_ROW.maximum)
+            self.ie_measure_widget.set_min_max(IE_HIGH_ROW.minimum, IE_HIGH_ROW.maximum)
+            self.ie_set_widget.set_min_max(IE_HIGH_ROW.minimum, IE_HIGH_ROW.maximum)
         else:
-            self.i_measure_widget.set_min_max(I_LOW_ROW.minimum, I_LOW_ROW.maximum)
-            self.i_set_widget.set_min_max(I_LOW_ROW.minimum, I_LOW_ROW.maximum)
-            self.i_c_measure_widget.set_min_max(I_C_LOW_ROW.minimum, I_C_LOW_ROW.maximum)
-            self.i_c_set_widget.set_min_max(I_C_LOW_ROW.minimum, I_C_LOW_ROW.maximum)
-            self.i_measure_widget.set_point_position(I_LOW_ROW.point_position_measure)
-            self.i_set_widget.set_point_position(I_LOW_ROW.point_position_set)
-            self.i_c_measure_widget.set_point_position(I_C_LOW_ROW.point_position_measure)
-            self.i_c_set_widget.set_point_position(I_C_LOW_ROW.point_position_set)
+            self.ic_measure_widget.set_point_position(IC_LOW_ROW.point_position_measure)
+            self.ic_set_widget.set_point_position(IC_LOW_ROW.point_position_set)
+            self.ie_measure_widget.set_point_position(IE_LOW_ROW.point_position_measure)
+            self.ie_set_widget.set_point_position(IE_LOW_ROW.point_position_set)
+
+            self.ic_measure_widget.set_min_max(IC_LOW_ROW.minimum, IC_LOW_ROW.maximum)
+            self.ic_set_widget.set_min_max(IC_LOW_ROW.minimum, IC_LOW_ROW.maximum)
+            self.ie_measure_widget.set_min_max(IE_LOW_ROW.minimum, IE_LOW_ROW.maximum)
+            self.ie_set_widget.set_min_max(IE_LOW_ROW.minimum, IE_LOW_ROW.maximum)
         self.is_high_range_changed.emit(state)
 
     def _change_is_diode_mode(self, state: bool) -> None:
@@ -226,25 +228,23 @@ class ChannelWidget(QWidget):
                 if widget is not None:
                     widget.setVisible(not hide)
 
-    def set_measure_value(self, variable_type: VariableType, value: float) -> None:
+    def set_measure_value(self, variable_type: VariableType, value: float | None) -> None:
         if variable_type == VariableType.VOLTAGE_C:
             self.vc_measure_widget.set_value(value)
-        elif variable_type == VariableType.CURRENT:
-            self.i_measure_widget.set_value(value)
-        elif variable_type == VariableType.VOLTAGE_CE:
-            self.vce_measure_widget.set_value(value)
         elif variable_type == VariableType.CURRENT_C:
-            self.i_c_measure_widget.set_value(value)
+            self.ic_measure_widget.set_value(value)
+        elif variable_type == VariableType.VOLTAGE_E:
+            self.ve_measure_widget.set_value(value)
 
     def set_set_value(self, variable_type: VariableType, value: float) -> None:
         if variable_type == VariableType.VOLTAGE_C:
             self.vc_set_widget.set_value(value)
-        elif variable_type == VariableType.CURRENT:
-            self.i_set_widget.set_value(value)
-        elif variable_type == VariableType.VOLTAGE_CE:
-            self.vce_set_widget.set_value(value)
         elif variable_type == VariableType.CURRENT_C:
-            self.i_c_set_widget.set_value(value)
+            self.ic_set_widget.set_value(value)
+        elif variable_type == VariableType.VOLTAGE_E:
+            self.ve_set_widget.set_value(value)
+        elif variable_type == VariableType.CURRENT_E:
+            self.ie_set_widget.set_value(value)
 
     def set_is_disabled(self, is_disabled: bool) -> None:
         self.enable_switch.set_state(is_disabled)
@@ -262,7 +262,7 @@ ROW_LABEL_WIDTH: int | None = None
 def _get_row_label_width() -> int:
     global ROW_LABEL_WIDTH
     if ROW_LABEL_WIDTH is None:
-        label = QLabel("V<sub>CE</sub>:")
+        label = QLabel("V<sub>C</sub>:")
         font = label.font()
         font.setPointSize(DIGIT_FONT_SIZE)
         label.setFont(font)

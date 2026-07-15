@@ -66,7 +66,7 @@ class MainWindow(QMainWindow):
 
         if config is not None:
             for device in config.root:
-                self.add_device_widget(device.name, device.ip)
+                self.add_device_widget(device.ip, device.name)
 
     def add_device_area(self, layout: QHBoxLayout) -> None:
         self.scroll_area = FitScrollArea(self)

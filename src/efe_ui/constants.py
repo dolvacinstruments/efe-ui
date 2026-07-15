@@ -10,9 +10,9 @@ TITLE_BAR_FONT_SIZE = 10
 
 class VariableType(Enum):
     VOLTAGE_C = 1
-    CURRENT = 2
-    VOLTAGE_CE = 3
-    CURRENT_C = 4
+    CURRENT_C = 2
+    VOLTAGE_E = 3
+    CURRENT_E = 4
 
 
 @dataclass
@@ -39,29 +39,7 @@ VC_ROW = RowConfig(
     point_position_set=0,
 )
 
-I_HIGH_ROW = RowConfig(
-    label="I:",
-    unit="μA",
-    minimum=-100.0,
-    maximum=0.0,
-    digit_count_measure=5,
-    digit_count_set=4,
-    point_position_measure=2,
-    point_position_set=1,
-)
-
-I_LOW_ROW = RowConfig(
-    label="I:",
-    unit="μA",
-    minimum=-1.0,
-    maximum=0.0,
-    digit_count_measure=5,
-    digit_count_set=4,
-    point_position_measure=4,
-    point_position_set=3,
-)
-
-VCE_ROW = RowConfig(
+VE_ROW = RowConfig(
     label="V<sub>E</sub>:",
     unit="V",
     minimum=-1200.0,
@@ -72,8 +50,30 @@ VCE_ROW = RowConfig(
     point_position_set=0,
 )
 
-I_C_HIGH_ROW = RowConfig(
+IC_HIGH_ROW = RowConfig(
     label="I<sub>C</sub>:",
+    unit="μA",
+    minimum=-100.0,
+    maximum=0.0,
+    digit_count_measure=5,
+    digit_count_set=4,
+    point_position_measure=2,
+    point_position_set=1,
+)
+
+IC_LOW_ROW = RowConfig(
+    label="I<sub>C</sub>:",
+    unit="μA",
+    minimum=-1.0,
+    maximum=0.0,
+    digit_count_measure=5,
+    digit_count_set=4,
+    point_position_measure=4,
+    point_position_set=3,
+)
+
+IE_HIGH_ROW = RowConfig(
+    label="I<sub>E</sub>:",
     unit="μA",
     minimum=-100.0,
     maximum=0.0,
@@ -84,8 +84,8 @@ I_C_HIGH_ROW = RowConfig(
     readable=False,
 )
 
-I_C_LOW_ROW = RowConfig(
-    label="I<sub>C</sub>:",
+IE_LOW_ROW = RowConfig(
+    label="I<sub>E</sub>:",
     unit="μA",
     minimum=-1.0,
     maximum=0.0,

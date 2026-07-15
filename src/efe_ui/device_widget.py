@@ -7,7 +7,7 @@ from efe_ui.channel_widget import (
     ChannelWidget,
 )
 from efe_ui.constants import CHANNEL_COUNT, VariableType
-from efe_ui.device import Device, DeviceStatus
+from efe_ui.device import EFE, DeviceMeasured, DeviceSetup, DeviceStatus, DeviceStatusKind
 from efe_ui.ui_helpers import create_title_bar_button, create_title_bar_label
 
 
@@ -25,7 +25,7 @@ class DeviceWidget(QWidget):
         QMetaObject.invokeMethod(self._device, "start_loop", Qt.ConnectionType.QueuedConnection)
 
     def _setup_device(self) -> None:
-        self._device = Device(self._ip)
+        self._device = EFE(self._ip)
         self._thread = QThread(self)
         self._device.moveToThread(self._thread)
         self._thread.started.connect(self._device.start_loop)
@@ -82,8 +82,9 @@ class DeviceWidget(QWidget):
     def _connect_signals(self) -> None:
         self._disconnect_button.clicked.connect(self.disconnect_from_device)
         self.disconnect_requested.connect(self._device.stop_worker)
-        self._device.value_updated.connect(self.set_measure_value)
+        self._device.measured_updated.connect(self.handle_measured_update)
         self._device.status_updated.connect(self.update_device_status)
+        self._device.setup_updated.connect(self.handle_setup_update)
         self._thread.finished.connect(self._handle_thread_exit)
 
         for i, channel_widget in enumerate(self._channel_widgets):
@@ -101,13 +102,25 @@ class DeviceWidget(QWidget):
         self.setParent(None)
         self.deleteLater()
 
-    @Slot(VariableType, float, int)
-    def set_measure_value(self, variable_type: VariableType, value: float, channel: int) -> None:
-        if channel < 0 or channel >= CHANNEL_COUNT:
-            return
+    @Slot(DeviceMeasured)
+    def handle_measured_update(self, measured: DeviceMeasured) -> None:
+        for i in range(CHANNEL_COUNT):
+            channel_widget = self._channel_widgets[i]
+            channel_widget.set_measure_value(VariableType.VOLTAGE_C, measured.voltage_c[i])
+            channel_widget.set_measure_value(VariableType.CURRENT_C, measured.current[i])
+            channel_widget.set_measure_value(VariableType.VOLTAGE_E, measured.voltage_e[i])
 
-        channel_widget = self._channel_widgets[channel]
-        channel_widget.set_measure_value(variable_type, value)
+    @Slot(DeviceSetup)
+    def handle_setup_update(self, setup: DeviceSetup) -> None:
+        for i in range(CHANNEL_COUNT):
+            channel_widget = self._channel_widgets[i]
+            channel_widget.set_is_disabled(setup.is_disabled[i])
+            channel_widget.set_is_diode_mode(setup.is_diode_mode[i])
+            channel_widget.set_is_high_range(setup.is_high_range[i])
+            channel_widget.set_set_value(VariableType.VOLTAGE_C, setup.voltage_c[i])
+            channel_widget.set_set_value(VariableType.CURRENT_C, setup.current_c[i])
+            channel_widget.set_set_value(VariableType.VOLTAGE_E, setup.voltage_e[i])
+            channel_widget.set_set_value(VariableType.CURRENT_E, setup.current_e[i])
 
     @Slot(VariableType, float, int)
     def set_set_value(self, variable_type: VariableType, value: float, channel: int) -> None:
@@ -135,4 +148,9 @@ class DeviceWidget(QWidget):
 
     @Slot(DeviceStatus)
     def update_device_status(self, status: DeviceStatus) -> None:
-        self._status_label.setText(status.value)
+        if status.kind == DeviceStatusKind.OK:
+            self._status_label.setText("OK")
+        elif status.kind == DeviceStatusKind.DISCONNECTED:
+            self._status_label.setText("Disconnected")
+        else:
+            self._status_label.setText(f"Error: {status.message}")

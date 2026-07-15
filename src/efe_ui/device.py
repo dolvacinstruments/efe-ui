@@ -1,12 +1,16 @@
+import logging
 import random
+import threading
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from enum import StrEnum
+from typing import Self
 
 import pyvisa
-from PySide6.QtCore import QMutex, QMutexLocker, QObject, QTimer, Signal, Slot
+from PySide6.QtCore import QObject, QTimer, Signal, Slot
 from pyvisa.resources import MessageBasedResource
 
 from efe_ui.constants import CHANNEL_COUNT, VariableType
-import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -15,150 +19,314 @@ logger = logging.getLogger(__name__)
 REFRESH_INTERVAL_MS = 200
 
 
-class DeviceStatus(StrEnum):
-    CONNECTED = "Connected"
-    CANNOT_CONNECT = "Failed to connect"
-    ERROR = "Error"
+class DeviceStatusKind(StrEnum):
+    OK = "OK"
     DISCONNECTED = "Disconnected"
+    CONNECTION_ERROR = "Connection Error"
+    IO_ERROR = "I/O Error"
+    UNKNOWN_ERROR = "Unknown Error"
 
 
-class Device(QObject):
+@dataclass
+class DeviceStatus:
+    kind: DeviceStatusKind
+    message: str | None = None
+
+    @classmethod
+    def ok(cls) -> Self:
+        return cls(kind=DeviceStatusKind.OK)
+
+
+@dataclass
+class DeviceSetup:
+    is_enabled: list[bool]
+    is_diode_mode: list[bool]
+    is_high_range: list[bool]
+
+    voltage_c: list[float]
+    current_c: list[float]
+    voltage_e: list[float]
+    current_e: list[float]
+
+    def __init__(self) -> None:
+        self.is_disabled = [True] * CHANNEL_COUNT
+        self.is_diode_mode = [True] * CHANNEL_COUNT
+        self.is_high_range = [True] * CHANNEL_COUNT
+
+        self.voltage_c = [0.0] * CHANNEL_COUNT
+        self.current_c = [0.0] * CHANNEL_COUNT
+        self.voltage_e = [0.0] * CHANNEL_COUNT
+        self.current_e = [0.0] * CHANNEL_COUNT
+
+
+@dataclass
+class DeviceMeasured:
+    voltage_c: list[float | None]
+    voltage_e: list[float | None]
+    current: list[float | None]
+
+    def __init__(self) -> None:
+        self.voltage_c = [None] * CHANNEL_COUNT
+        self.voltage_e = [None] * CHANNEL_COUNT
+        self.current = [None] * CHANNEL_COUNT
+
+
+class EFE(QObject):
+    setup_updated = Signal(DeviceSetup)
     status_updated = Signal(DeviceStatus)
-    value_updated = Signal(VariableType, float, int)
+    measured_updated = Signal(DeviceMeasured)
 
     def __init__(self, ip: str) -> None:
         super().__init__()
-        self._ip = ip
-        self._is_diode_mode = [True] * CHANNEL_COUNT
-        self._is_enabled = [False] * CHANNEL_COUNT
+        self._current = DeviceSetup()
+        self._new = DeviceSetup()
 
-        self._device_mutex = QMutex()
-        self._device: MessageBasedResource | DebugDevice | None = None
-
-    def open(self) -> None:
-        with QMutexLocker(self._device_mutex):
-            # # Debug code:
-            # self._device = DebugDevice(self._ip)
-            # self.status_updated.emit(DeviceStatus.CONNECTED)
-
-            # return
-            rm = pyvisa.ResourceManager("@py")
-            for _ in range(3):
-                try:
-                    # supporting ::INSTR requires VXI11
-                    self._device: MessageBasedResource = rm.open_resource(f"TCPIP0::{self._ip}::5025::SOCKET")  # ty:ignore[invalid-assignment]
-                    self._device.write_termination = '\n'
-                    self._device.read_termination = '\n'
-                    self.status_updated.emit(DeviceStatus.CONNECTED)
-                    return
-                except pyvisa.VisaIOError as e:
-                    # TODO: Message boxes
-                    logger.error(f"VisaIOError: {e}")                    
-                    continue
-                except ConnectionRefusedError as e:
-                    logger.error(f"Connection refused: {e}")
-                    continue
-            self.status_updated.emit(DeviceStatus.CANNOT_CONNECT)
+        self._device = RealDevice(ip)
+        self._device_connected = False
 
     @Slot()
     def start_loop(self) -> None:
-        self.open()
 
         self.timer = QTimer(self)
-        self.timer.timeout.connect(self.poll_device)
+        self.timer.setSingleShot(True)
+        self.timer.timeout.connect(self.tick)
+        self.timer.start(REFRESH_INTERVAL_MS)
+
+    @Slot()
+    def tick(self) -> None:
+        if self._device_connected:
+            self.update_device()
+            self.poll_device()
+        else:
+            self.connect_device()
+            self.query_device_setup()
         self.timer.start(REFRESH_INTERVAL_MS)
 
     @Slot()
     def stop_worker(self) -> None:
-        with QMutexLocker(self._device_mutex):
-            self.timer.stop()
-            if self._device is not None:
-                self._device.close()
-                self._device = None
-            self.status_updated.emit(DeviceStatus.DISCONNECTED)
-            self.thread().quit()
+        self.timer.stop()
+        if self._device is not None:
+            self._device.close()
+        self.thread().quit()
 
     @Slot(int, bool)
     def set_disabled(self, channel: int, is_disabled: bool) -> None:
-        with QMutexLocker(self._device_mutex):
-            if self._device is None:
-                self.status_updated.emit(DeviceStatus.ERROR)
-                return
-            if is_disabled:
-                self._device.write(f"OUTP{channel + 1} OFF")
-            else:
-                self._device.write(f"OUTP{channel + 1} ON")
-            self._is_enabled[channel] = not is_disabled
+        self._new.is_disabled[channel] = is_disabled
 
     @Slot(int, bool)
     def set_diode_mode(self, channel: int, is_diode_mode: bool) -> None:
-        with QMutexLocker(self._device_mutex):
-            if self._device is None:
-                self.status_updated.emit(DeviceStatus.ERROR)
-                return
-            if is_diode_mode:
-                self._device.write(f"FUNC{channel + 1} DIODE")
-            else:
-                self._device.write(f"FUNC{channel + 1} TRIODE")
-            self._is_diode_mode[channel] = is_diode_mode
+        self._new.is_diode_mode[channel] = is_diode_mode
 
     @Slot(int, bool)
     def set_high_range(self, channel: int, is_high_range: bool) -> None:
-        with QMutexLocker(self._device_mutex):
-            if self._device is None:
-                self.status_updated.emit(DeviceStatus.ERROR)
-                return
-            if is_high_range:
-                self._device.write(f"SOUR{channel+1}:CURRENT:RANG 1E-4")
-            else:
-                self._device.write(f"SOUR{channel+1}:CURRENT:RANG 1E-6")
+        self._new.is_high_range[channel] = is_high_range
 
     @Slot(int, VariableType, float)
     def set_value(self, channel: int, variable_type: VariableType, value: float) -> None:
-        print("device: set_value triggered")
-        with QMutexLocker(self._device_mutex):
-            if self._device is None:
-                self.status_updated.emit(DeviceStatus.ERROR)
-                return
-            if variable_type == VariableType.VOLTAGE_C:
-                self._device.write(f"SOUR{channel + 1}:VOLTC {value}")
-            elif variable_type == VariableType.CURRENT:
-                self._device.write(f"SOUR{channel + 1}:CURRE {value / 1e6}")
-            elif variable_type == VariableType.VOLTAGE_CE:
-                self._device.write(f"SOUR{channel + 1}:VOLTE {value}")
-            elif variable_type == VariableType.CURRENT_C:
-                self._device.write(f"SOUR{channel + 1}:CURRC {value / 1e6}")
+        if variable_type == VariableType.VOLTAGE_C:
+            self._new.voltage_c[channel] = value
+        elif variable_type == VariableType.CURRENT_C:
+            self._new.current_c[channel] = value / 1e6
+        elif variable_type == VariableType.VOLTAGE_E:
+            self._new.voltage_e[channel] = value
+        elif variable_type == VariableType.CURRENT_E:
+            self._new.current_e[channel] = value / 1e6
 
-    @Slot()
+    def connect_device(self) -> None:
+        try:
+            self._device.open()
+            self._device_connected = True
+            self.status_updated.emit(DeviceStatus.ok())
+            return
+        except DeviceConnectionError as e:
+            self.status_updated.emit(DeviceStatus(DeviceStatusKind.CONNECTION_ERROR, str(e)))
+            return
+        except DeviceIOError as e:
+            self.status_updated.emit(DeviceStatus(DeviceStatusKind.IO_ERROR, str(e)))
+            return
+
     def poll_device(self) -> None:
-        with QMutexLocker(self._device_mutex):
-            if self._device is None:
-                self.status_updated.emit(DeviceStatus.ERROR)
-                return
+        try:
             for i in range(CHANNEL_COUNT):
-                if not self._is_enabled[i]:
-                    continue
-                try:
-                    vc = float(self._device.query(f"MEAS{i + 1}:VOLTC?"))
-                    self.value_updated.emit(VariableType.VOLTAGE_C, vc, i)
-                    curr = float(self._device.query(f"MEAS{i + 1}:CURR?")) * 1e6
-                    self.value_updated.emit(VariableType.CURRENT, curr, i)
+                if not self._current.is_disabled[i]:
+                    measured = DeviceMeasured()
+                    measured.voltage_c[i] = float(self._device.query(f"MEAS{i + 1}:VOLTC?"))
+                    measured.current[i] = float(self._device.query(f"MEAS{i + 1}:CURR?")) * 1e6
+                    if not self._current.is_diode_mode[i]:
+                        measured.voltage_e[i] = float(self._device.query(f"MEAS{i + 1}:VOLTE?"))
+                    self.measured_updated.emit(measured)
+        except DeviceIOError as e:
+            logger.error(f"Error occurred while polling device: {e}")
+            self.status_updated.emit(DeviceStatus(DeviceStatusKind.IO_ERROR, str(e)))
+        except DeviceDisconnectedError as e:
+            self.status_updated.emit(DeviceStatus(DeviceStatusKind.DISCONNECTED, str(e)))
+            self._device_connected = False
 
-                    if not self._is_diode_mode[i]:
-                        vce = float(self._device.query(f"MEAS{i + 1}:VOLTE?"))
-                        self.value_updated.emit(VariableType.VOLTAGE_CE, vce, i)
+    def update_device(self) -> None:
+        try:
+            for i in range(CHANNEL_COUNT):
+                if self._current.is_disabled[i] != self._new.is_disabled[i]:
+                    if self._new.is_disabled[i]:
+                        self._device.write(f"OUTP{i + 1} OFF")
+                    else:
+                        self._device.write(f"OUTP{i + 1} ON")
+                    self._current.is_disabled[i] = self._new.is_disabled[i]
 
-                except pyvisa.VisaIOError as e:
-                    logger.error(f"VisaIOError: {e}")
-                    self.status_updated.emit(DeviceStatus.ERROR)
+                if self._current.is_diode_mode[i] != self._new.is_diode_mode[i]:
+                    if self._new.is_diode_mode[i]:
+                        self._device.write(f"MODE{i + 1}:DIODE")
+                    else:
+                        self._device.write(f"MODE{i + 1}:NORMAL")
+                    self._current.is_diode_mode[i] = self._new.is_diode_mode[i]
+
+                if self._current.is_high_range[i] != self._new.is_high_range[i]:
+                    if self._new.is_high_range[i]:
+                        self._device.write(f"SOUR{i + 1}:CURR:RANG 1e-4")
+                    else:
+                        self._device.write(f"SOUR{i + 1}:CURR:RANG 1e-6")
+                    self._current.is_high_range[i] = self._new.is_high_range[i]
+
+                if self._current.voltage_c[i] != self._new.voltage_c[i]:
+                    self._device.write(f"SOUR{i + 1}:VOLTC {self._new.voltage_c[i]}")
+                    self._current.voltage_c[i] = self._new.voltage_c[i]
+
+                if self._current.current_c[i] != self._new.current_c[i]:
+                    self._device.write(f"SOUR{i + 1}:CURRC {self._new.current_c[i]}")
+                    self._current.current_c[i] = self._new.current_c[i]
+
+                if not self._current.is_diode_mode[i]:
+                    if self._current.voltage_e[i] != self._new.voltage_e[i]:
+                        self._device.write(f"SOUR{i + 1}:VOLTE {self._new.voltage_e[i]}")
+                        self._current.voltage_e[i] = self._new.voltage_e[i]
+
+                    if self._current.current_e[i] != self._new.current_e[i]:
+                        self._device.write(f"SOUR{i + 1}:CURRE {self._new.current_e[i]}")
+                        self._current.current_e[i] = self._new.current_e[i]
+
+        except DeviceIOError as e:
+            logger.error(f"Error occurred while updating device: {e}")
+            self.status_updated.emit(DeviceStatus(DeviceStatusKind.IO_ERROR, str(e)))
+        except DeviceDisconnectedError as e:
+            self.status_updated.emit(DeviceStatus(DeviceStatusKind.DISCONNECTED, str(e)))
+            self._device_connected = False
+
+    def query_device_setup(self) -> None:
+        logger.info("Querying device setup...")
+        try:
+            for i in range(CHANNEL_COUNT):
+                # TODO: doesn't exist yet
+                # self._current.is_enabled[i] = self._device.query(f"OUTP{i + 1}?") == "ON"
+                # self._current_values.is_diode_mode[i] = self._device.query(f"MODE{i + 1}?") == "DIODE"
+                # TODO: make this better
+                self._current.is_high_range[i] = float(self._device.query(f"SOUR{i + 1}:CURR:RANG?")) > 1e-5
+
+                self._current.voltage_c[i] = float(self._device.query(f"SOUR{i + 1}:VOLTC?"))
+                self._current.current_c[i] = float(self._device.query(f"SOUR{i + 1}:CURRC?")) * 1e6
+                self._current.voltage_e[i] = float(self._device.query(f"SOUR{i + 1}:VOLTE?"))
+                self._current.current_e[i] = float(self._device.query(f"SOUR{i + 1}:CURRE?")) * 1e6
+
+            self.setup_updated.emit(self._current)
+        except DeviceIOError as e:
+            logger.error(f"Error occurred while querying device setup: {e}")
+            self.status_updated.emit(DeviceStatus(DeviceStatusKind.IO_ERROR, str(e)))
+        except DeviceDisconnectedError as e:
+            self.status_updated.emit(DeviceStatus(DeviceStatusKind.DISCONNECTED, str(e)))
+            self._device_connected = False
 
 
-class DebugDevice:
+class Device(ABC):
+    @abstractmethod
+    def open(self) -> None:
+        pass
+
+    @abstractmethod
+    def write(self, command: str) -> None:
+        pass
+
+    @abstractmethod
+    def query(self, command: str) -> str:
+        pass
+
+    @abstractmethod
+    def close(self) -> None:
+        pass
+
+
+class DeviceDisconnectedError(Exception):
+    pass
+
+
+class DeviceConnectionError(Exception):
+    pass
+
+
+class DeviceIOError(Exception):
+    pass
+
+
+class RealDevice(Device):
+    def __init__(self, ip: str) -> None:
+        self._device: MessageBasedResource | DebugDevice | None = None
+        self._ip = ip
+        self._stop = threading.Event()
+
+    def open(self) -> None:
+        rm = pyvisa.ResourceManager("@py")
+        try:
+            name = f"TCPIP0::{self._ip}::5025::SOCKET"
+            print(name)
+            self._device: MessageBasedResource = rm.open_resource(name)  # ty:ignore[invalid-assignment]
+            self._device.write_termination = "\n"
+            self._device.read_termination = "\n"
+            return
+        except pyvisa.VisaIOError as e:
+            raise DeviceIOError(f"Error occurred while opening device: {e}") from e
+        except ConnectionRefusedError as e:
+            raise DeviceConnectionError(f"Connection refused: {e}") from e
+
+    def write(self, command: str) -> None:
+        if self._device is None:
+            raise RuntimeError("Device not initialized.")
+        try:
+            logger.info(f"Sending: {command}")
+            self._device.write(command)
+        except pyvisa.VisaIOError as e:
+            if "VI_ERROR_CONN_LOST" in str(e):
+                raise DeviceDisconnectedError("Connection lost while writing to device") from e
+            else:
+                raise DeviceIOError(f"Error occurred while writing to device: {e}") from e
+
+    def query(self, command: str) -> str:
+        if self._device is None:
+            raise RuntimeError("Device not initialized.")
+        try:
+            logger.info("Query")
+            ret = self._device.query(command)
+            logger.info(f"Queried: {command} , received: {ret}")
+            return ret
+        except pyvisa.VisaIOError as e:
+            if "VI_ERROR_CONN_LOST" in str(e):
+                raise DeviceDisconnectedError("Connection lost while querying device. Please reconnect.") from e
+            else:
+                raise DeviceIOError(f"Error occurred while querying device: {e}") from e
+
+    def close(self) -> None:
+        if self._device is not None:
+            self._device.close()
+            self._device = None
+        self._stop.set()
+
+
+class DebugDevice(Device):
     def __init__(self, ip: str) -> None:
         self._ip = ip
 
+    def open(self) -> None:
+        return
+
     def write(self, command: str) -> None:
         print(f"DebugDevice({self._ip}): write({command})")
+        return
 
     def query(self, command: str) -> str:
         print(f"DebugDevice({self._ip}): query({command})")
@@ -166,7 +334,7 @@ class DebugDevice:
             return str(random.uniform(-1200.0, -1))
         elif "MEAS" in command and "CURR" in command:
             return str(random.uniform(0.0, 1.0))
-        return "0.0"
+        raise RuntimeError("Unexpected query response.")
 
     def close(self) -> None:
         print(f"DebugDevice({self._ip}): close()")
