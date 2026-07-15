@@ -144,7 +144,7 @@ class ChannelWidget(QWidget):
         grid.addWidget(label, row, 0, alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
         measure_widget = NumberWidget(
-            None, config.digit_count_measure, config.point_position_measure, config.minimum, config.maximum, self
+            None, config.digit_count_measure, config.point_position_measure, -float('inf'), float("inf"), self
         )
         measure_widget.set_editable(False)
         if not config.readable:
