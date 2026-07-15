@@ -290,6 +290,8 @@ class RealDevice(Device):
         try:
             logger.info(f"Sending: {command}")
             self._device.write(command)
+        except ConnectionResetError as e:
+            raise DeviceDisconnectedError("Connection reset while querying device") from e
         except pyvisa.VisaIOError as e:
             if "VI_ERROR_CONN_LOST" in str(e):
                 raise DeviceDisconnectedError("Connection lost while writing to device") from e
@@ -304,9 +306,11 @@ class RealDevice(Device):
             ret = self._device.query(command)
             logger.info(f"Queried: {command} , received: {ret}")
             return ret
+        except ConnectionResetError as e:
+            raise DeviceDisconnectedError("Connection reset while querying device") from e
         except pyvisa.VisaIOError as e:
             if "VI_ERROR_CONN_LOST" in str(e):
-                raise DeviceDisconnectedError("Connection lost while querying device. Please reconnect.") from e
+                raise DeviceDisconnectedError("Connection lost while querying device") from e
             else:
                 raise DeviceIOError(f"Error occurred while querying device: {e}") from e
 

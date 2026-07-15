@@ -1,7 +1,7 @@
 from functools import partial
 
 from PySide6.QtCore import QMetaObject, Qt, QThread, Signal, Slot
-from PySide6.QtWidgets import QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QMessageBox, QSizePolicy, QVBoxLayout, QWidget
 
 from efe_ui.channel_widget import (
     ChannelWidget,
@@ -19,6 +19,7 @@ class DeviceWidget(QWidget):
         self._device_name = device_name
         self._ip = ip
         self._channel_widgets: list[ChannelWidget] = []
+        self._last_status: DeviceStatus | None = None
         self._setup_device()
         self._setup_ui()
         self._connect_signals()
@@ -72,6 +73,7 @@ class DeviceWidget(QWidget):
         title_layout.setContentsMargins(10, 0, 10, 0)
 
         self._status_label = create_title_bar_label("Connecting...")
+        self._status_label.setStyleSheet("color: red;")
         title_layout.addWidget(self._status_label)
 
         title_layout.addStretch(1)
@@ -148,9 +150,14 @@ class DeviceWidget(QWidget):
 
     @Slot(DeviceStatus)
     def update_device_status(self, status: DeviceStatus) -> None:
+        if self._last_status is not None and self._last_status.message == status.message:
+            return  # No change in status, do nothing
+        self._last_status = status
         if status.kind == DeviceStatusKind.OK:
-            self._status_label.setText("OK")
+            self._status_label.setText("")
         elif status.kind == DeviceStatusKind.DISCONNECTED:
             self._status_label.setText("Disconnected")
         else:
-            self._status_label.setText(f"Error: {status.message}")
+            QMessageBox.critical(
+                self, "Device Error", f"Device {self._device_name} ({self._ip}) encountered an error: {status.message}"
+            )
