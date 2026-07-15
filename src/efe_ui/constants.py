@@ -62,7 +62,7 @@ I_LOW_ROW = RowConfig(
 )
 
 VCE_ROW = RowConfig(
-    label="V<sub>CE</sub>:",
+    label="V<sub>E</sub>:",
     unit="V",
     minimum=-1200.0,
     maximum=-5.0,
