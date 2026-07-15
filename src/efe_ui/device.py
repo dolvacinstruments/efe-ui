@@ -6,6 +6,11 @@ from PySide6.QtCore import QMutex, QMutexLocker, QObject, QTimer, Signal, Slot
 from pyvisa.resources import MessageBasedResource
 
 from efe_ui.constants import CHANNEL_COUNT, VariableType
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 REFRESH_INTERVAL_MS = 200
 
@@ -32,19 +37,26 @@ class Device(QObject):
 
     def open(self) -> None:
         with QMutexLocker(self._device_mutex):
-            # Debug code:
-            self._device = DebugDevice(self._ip)
-            self.status_updated.emit(DeviceStatus.CONNECTED)
+            # # Debug code:
+            # self._device = DebugDevice(self._ip)
+            # self.status_updated.emit(DeviceStatus.CONNECTED)
 
-            return
+            # return
             rm = pyvisa.ResourceManager("@py")
             for _ in range(3):
                 try:
-                    self._device: MessageBasedResource = rm.open_resource(f"TCPIP0::{self._ip}::INSTR")  # ty:ignore[invalid-assignment]
+                    # supporting ::INSTR requires VXI11
+                    self._device: MessageBasedResource = rm.open_resource(f"TCPIP0::{self._ip}::5025::SOCKET")  # ty:ignore[invalid-assignment]
+                    self._device.write_termination = '\n'
+                    self._device.read_termination = '\n'
                     self.status_updated.emit(DeviceStatus.CONNECTED)
-                    self.start_loop()
                     return
-                except pyvisa.VisaIOError:
+                except pyvisa.VisaIOError as e:
+                    # TODO: Message boxes
+                    logger.error(f"VisaIOError: {e}")                    
+                    continue
+                except ConnectionRefusedError as e:
+                    logger.error(f"Connection refused: {e}")
                     continue
             self.status_updated.emit(DeviceStatus.CANNOT_CONNECT)
 
@@ -97,9 +109,9 @@ class Device(QObject):
                 self.status_updated.emit(DeviceStatus.ERROR)
                 return
             if is_high_range:
-                self._device.write(f"RANGE{channel + 1} HIGH")
+                self._device.write(f"SOUR{channel+1}:CURRENT:RANG 1E-4")
             else:
-                self._device.write(f"RANGE{channel + 1} LOW")
+                self._device.write(f"SOUR{channel+1}:CURRENT:RANG 1E-6")
 
     @Slot(int, VariableType, float)
     def set_value(self, channel: int, variable_type: VariableType, value: float) -> None:
@@ -111,11 +123,11 @@ class Device(QObject):
             if variable_type == VariableType.VOLTAGE_C:
                 self._device.write(f"SOUR{channel + 1}:VOLTC {value}")
             elif variable_type == VariableType.CURRENT:
-                self._device.write(f"SOUR{channel + 1}:CURR {value}")
+                self._device.write(f"SOUR{channel + 1}:CURRE {value / 1e6}")
             elif variable_type == VariableType.VOLTAGE_CE:
-                self._device.write(f"SOUR{channel + 1}:VOLTCE {value}")
+                self._device.write(f"SOUR{channel + 1}:VOLTE {value}")
             elif variable_type == VariableType.CURRENT_C:
-                self._device.write(f"SOUR{channel + 1}:CURRC {value}")
+                self._device.write(f"SOUR{channel + 1}:CURRC {value / 1e6}")
 
     @Slot()
     def poll_device(self) -> None:
@@ -129,14 +141,15 @@ class Device(QObject):
                 try:
                     vc = float(self._device.query(f"MEAS{i + 1}:VOLTC?"))
                     self.value_updated.emit(VariableType.VOLTAGE_C, vc, i)
-                    curr = float(self._device.query(f"MEAS{i + 1}:CURR?"))
+                    curr = float(self._device.query(f"MEAS{i + 1}:CURR?")) * 1e6
                     self.value_updated.emit(VariableType.CURRENT, curr, i)
 
                     if not self._is_diode_mode[i]:
-                        vce = float(self._device.query(f"MEAS{i + 1}:VOLTCE?"))
+                        vce = float(self._device.query(f"MEAS{i + 1}:VOLTE?"))
                         self.value_updated.emit(VariableType.VOLTAGE_CE, vce, i)
 
-                except pyvisa.VisaIOError:
+                except pyvisa.VisaIOError as e:
+                    logger.error(f"VisaIOError: {e}")
                     self.status_updated.emit(DeviceStatus.ERROR)
 
 
