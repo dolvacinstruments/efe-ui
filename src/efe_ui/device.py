@@ -324,7 +324,7 @@ class RealDevice(Device):
                     raise DeviceDisconnectedError("Socket closed by remote while reading")
                 self._buffer += chunk
         except TimeoutError as e:
-            raise DeviceIOError("Read timeout - no data") from e
+            raise DeviceDisconnectedError("Read timeout - no data") from e # decide how to handle
         except ConnectionResetError as e:
             raise DeviceDisconnectedError(f"Connection reset while reading: {e}") from e
         except OSError as e:
