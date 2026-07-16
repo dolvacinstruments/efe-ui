@@ -214,8 +214,8 @@ class EFE(QObject):
         logger.info("Querying device setup...")
         try:
             for i in range(CHANNEL_COUNT):
+                self._current.is_disabled[i] = self._device.query(f"OUTP{i + 1}?") == "OFF"
                 # TODO: doesn't exist yet
-                # self._current.is_enabled[i] = self._device.query(f"OUTP{i + 1}?") == "ON"
                 # self._current_values.is_diode_mode[i] = self._device.query(f"MODE{i + 1}?") == "DIODE"
                 # TODO: make this better
                 self._current.is_high_range[i] = float(self._device.query(f"SOUR{i + 1}:CURR:RANG?")) > 1e-5
@@ -271,7 +271,8 @@ class RealDevice(Device):
         self._ip = ip
         self._port = 5025
         self._stop = threading.Event()
-        self._timeout = 10.0  # seconds for socket operations
+        self._timeout = 3  # seconds for socket operations
+        self._buffer = b""
 
     def open(self) -> None:
         try:
@@ -313,14 +314,17 @@ class RealDevice(Device):
         data = b""
         try:
             while True:
+                if terminator in self._buffer:
+                    pos = self._buffer.find(terminator) + len(terminator)
+                    data, self._buffer = self._buffer[:pos], self._buffer[pos:]
+                    return data
+                
                 chunk = self._sock.recv(4096)
                 if not chunk:
                     raise DeviceDisconnectedError("Socket closed by remote while reading")
-                data += chunk
-                if data.endswith(terminator):
-                    break
+                self._buffer += chunk
         except TimeoutError as e:
-            raise DeviceDisconnectedError("Read timeout - connection lost or no data") from e
+            raise DeviceIOError("Read timeout - no data") from e
         except ConnectionResetError as e:
             raise DeviceDisconnectedError(f"Connection reset while reading: {e}") from e
         except OSError as e:
