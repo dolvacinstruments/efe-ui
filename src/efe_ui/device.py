@@ -1,14 +1,13 @@
 import logging
 import random
+import socket
 import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Self
 
-import pyvisa
 from PySide6.QtCore import QObject, QTimer, Signal, Slot
-from pyvisa.resources import MessageBasedResource
 
 from efe_ui.constants import CHANNEL_COUNT, VariableType
 
@@ -98,6 +97,7 @@ class EFE(QObject):
             self.update_device()
             self.poll_device()
         else:
+            logger.info("Device not connected. Attempting to connect...")
             self.connect_device()
             self.query_device_setup()
         self.timer.start(REFRESH_INTERVAL_MS)
@@ -264,62 +264,103 @@ class DeviceIOError(Exception):
     pass
 
 
+
 class RealDevice(Device):
     def __init__(self, ip: str) -> None:
-        self._device: MessageBasedResource | DebugDevice | None = None
+        self._sock: socket.socket | None = None
         self._ip = ip
+        self._port = 5025
         self._stop = threading.Event()
+        self._timeout = 10.0  # seconds for socket operations
 
     def open(self) -> None:
-        rm = pyvisa.ResourceManager("@py")
         try:
-            name = f"TCPIP0::{self._ip}::5025::SOCKET"
-            print(name)
-            self._device: MessageBasedResource = rm.open_resource(name)  # ty:ignore[invalid-assignment]
-            self._device.write_termination = "\n"
-            self._device.read_termination = "\n"
-            return
-        except pyvisa.VisaIOError as e:
-            raise DeviceIOError(f"Error occurred while opening device: {e}") from e
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(self._timeout)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+
+            try:
+                # Platform‑specific keep‑alive parameters (Linux / macOS)
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 5)
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 5)
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+            except (AttributeError, OSError) as e:
+                raise DeviceIOError("TCP keep-alive settings not yet supported on Windows") from e
+
+            sock.connect((self._ip, self._port))
+            self._sock = sock
+            logger.info(f"Connected to {self._ip}:{self._port}")
+        except TimeoutError as e:
+            raise DeviceConnectionError(f"Connection timeout to {self._ip}:{self._port}: {e}") from e
         except ConnectionRefusedError as e:
             raise DeviceConnectionError(f"Connection refused: {e}") from e
+        except OSError as e:
+            raise DeviceIOError(f"Socket error while opening device: {e}") from e
+
+    def _send(self, data: bytes) -> None:
+        if self._sock is None:
+            raise RuntimeError("Device not initialized.")
+        try:
+            self._sock.sendall(data)
+        except (TimeoutError, ConnectionResetError, BrokenPipeError) as e:
+            raise DeviceDisconnectedError(f"Connection lost while sending: {e}") from e
+        except OSError as e:
+            raise DeviceIOError(f"Socket error during send: {e}") from e
+
+    def _read_until(self, terminator: bytes = b"\n") -> bytes:
+        if self._sock is None:
+            raise RuntimeError("Device not initialized.")
+        data = b""
+        try:
+            while True:
+                chunk = self._sock.recv(4096)
+                if not chunk:
+                    raise DeviceDisconnectedError("Socket closed by remote while reading")
+                data += chunk
+                if data.endswith(terminator):
+                    break
+        except TimeoutError as e:
+            raise DeviceDisconnectedError("Read timeout - connection lost or no data") from e
+        except ConnectionResetError as e:
+            raise DeviceDisconnectedError(f"Connection reset while reading: {e}") from e
+        except OSError as e:
+            raise DeviceIOError(f"Socket error during read: {e}") from e
+        return data
 
     def write(self, command: str) -> None:
-        if self._device is None:
+        """Send a command (appends newline)."""
+        if self._sock is None:
             raise RuntimeError("Device not initialized.")
         try:
+            cmd_bytes = (command + "\n").encode("ascii")
             logger.info(f"Sending: {command}")
-            self._device.write(command)
-        except ConnectionResetError as e:
-            raise DeviceDisconnectedError("Connection reset while querying device") from e
-        except pyvisa.VisaIOError as e:
-            if "VI_ERROR_CONN_LOST" in str(e):
-                raise DeviceDisconnectedError("Connection lost while writing to device") from e
-            else:
-                raise DeviceIOError(f"Error occurred while writing to device: {e}") from e
+            self._send(cmd_bytes)
+        except (DeviceDisconnectedError, DeviceIOError):
+            raise
+        except Exception as e:
+            raise DeviceIOError(f"Unexpected error while writing: {e}") from e
 
     def query(self, command: str) -> str:
-        if self._device is None:
+        """Send a command and read the response (terminated by newline)."""
+        if self._sock is None:
             raise RuntimeError("Device not initialized.")
         try:
-            logger.info("Query")
-            ret = self._device.query(command)
-            logger.info(f"Queried: {command} , received: {ret}")
+            self.write(command)  # write also logs and handles exceptions
+            response = self._read_until(b"\n")
+            ret = response.decode("ascii").rstrip("\n")
+            logger.info(f"Received: {ret}")
             return ret
-        except ConnectionResetError as e:
-            raise DeviceDisconnectedError("Connection reset while querying device") from e
-        except pyvisa.VisaIOError as e:
-            if "VI_ERROR_CONN_LOST" in str(e):
-                raise DeviceDisconnectedError("Connection lost while querying device") from e
-            else:
-                raise DeviceIOError(f"Error occurred while querying device: {e}") from e
+        except (DeviceDisconnectedError, DeviceIOError):
+            raise
+        except Exception as e:
+            raise DeviceIOError(f"Unexpected error during query: {e}") from e
 
     def close(self) -> None:
-        if self._device is not None:
-            self._device.close()
-            self._device = None
+        """Close the socket and signal the stop event."""
+        if self._sock is not None:
+            self._sock.close()
+            self._sock = None
         self._stop.set()
-
 
 class DebugDevice(Device):
     def __init__(self, ip: str) -> None:
