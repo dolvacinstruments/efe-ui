@@ -2,12 +2,13 @@ import logging
 import random
 import socket
 import threading
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Self
 
-from PySide6.QtCore import QObject, QTimer, Signal, Slot
+from PySide6.QtCore import QObject, QTimer, Signal, Slot, QElapsedTimer
 
 from efe_ui.constants import CHANNEL_COUNT, VariableType
 
@@ -70,6 +71,31 @@ class DeviceMeasured:
         self.current = [None] * CHANNEL_COUNT
 
 
+class TickWorker(QObject):
+    def __init__(self, tick_callback: callable[[], None]) -> None:
+        super().__init__()
+        self.tick_callback = tick_callback
+        self.timer = QTimer(self)
+        self.timer.setSingleShot(True)
+        self.timer.timeout.connect(self._tick)
+
+    def start(self) -> None:
+        self.timer.start(REFRESH_INTERVAL_MS)
+        pass
+
+    def _tick(self) -> None:
+        start_time = time.time()
+
+        try:
+            self.tick_callback()
+        except Exception as e:
+            logger.error(e, exc_info=True)
+
+        elapsed = (time.time() - start_time) * 1000
+
+        delay = max(0, REFRESH_INTERVAL_MS - elapsed)
+        self.timer.start(delay)
+
 class EFE(QObject):
     setup_updated = Signal(DeviceSetup)
     status_updated = Signal(DeviceStatus)
@@ -82,14 +108,12 @@ class EFE(QObject):
 
         self._device = RealDevice(ip)
         self._device_connected = False
+        self._worker = None
 
     @Slot()
     def start_loop(self) -> None:
-
-        self.timer = QTimer(self)
-        self.timer.setSingleShot(True)
-        self.timer.timeout.connect(self.tick)
-        self.timer.start(REFRESH_INTERVAL_MS)
+        self._worker = TickWorker(self.tick)
+        self._worker.start()
 
     @Slot()
     def tick(self) -> None:
@@ -99,12 +123,12 @@ class EFE(QObject):
         else:
             logger.info("Device not connected. Attempting to connect...")
             self.connect_device()
-            self.query_device_setup()
-        self.timer.start(REFRESH_INTERVAL_MS)
+            if self._device_connected:
+                self.query_device_setup()
 
     @Slot()
     def stop_worker(self) -> None:
-        self.timer.stop()
+        self._worker.timer.stop()
         if self._device is not None:
             self._device.close()
         self.thread().quit()
@@ -137,13 +161,8 @@ class EFE(QObject):
             self._device.open()
             self._device_connected = True
             self.status_updated.emit(DeviceStatus.ok())
-            return
         except DeviceConnectionError as e:
             self.status_updated.emit(DeviceStatus(DeviceStatusKind.CONNECTION_ERROR, str(e)))
-            return
-        except DeviceIOError as e:
-            self.status_updated.emit(DeviceStatus(DeviceStatusKind.IO_ERROR, str(e)))
-            return
 
     def poll_device(self) -> None:
         try:
@@ -296,7 +315,7 @@ class RealDevice(Device):
         except ConnectionRefusedError as e:
             raise DeviceConnectionError(f"Connection refused: {e}") from e
         except OSError as e:
-            raise DeviceIOError(f"Socket error while opening device: {e}") from e
+            raise DeviceConnectionError(e) from e
 
     def _send(self, data: bytes) -> None:
         if self._sock is None:

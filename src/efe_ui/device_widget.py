@@ -20,6 +20,7 @@ class DeviceWidget(QWidget):
         self._ip = ip
         self._channel_widgets: list[ChannelWidget] = []
         self._last_status: DeviceStatus | None = None
+        self._msgbox: QMessageBox | None = None
         self._setup_device()
         self._setup_ui()
         self._connect_signals()
@@ -157,7 +158,17 @@ class DeviceWidget(QWidget):
             self._status_label.setText("")
         elif status.kind == DeviceStatusKind.DISCONNECTED:
             self._status_label.setText("Disconnected")
+        elif status.kind == DeviceStatusKind.CONNECTION_ERROR:
+            self._status_label.setText(f"Connection Error: {status.message}")
         else:
-            QMessageBox.critical(
-                self, "Device Error", f"Device {self._device_name} ({self._ip}) encountered an error: {status.message}"
+            if self._msgbox:
+                self._msgbox.close()
+
+            self._msgbox = QMessageBox(self)
+            self._msgbox.setIcon(QMessageBox.Icon.Critical)
+            self._msgbox.setWindowTitle("Device Error")
+            self._msgbox.setText(
+                f"Device {self._device_name} ({self._ip}) encountered an error: {status.message}"
             )
+
+            self._msgbox.show()
