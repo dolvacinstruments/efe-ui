@@ -4,11 +4,12 @@ import socket
 import threading
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Self
 
-from PySide6.QtCore import QObject, QTimer, Signal, Slot, QElapsedTimer
+from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
 from efe_ui.constants import CHANNEL_COUNT, VariableType
 
@@ -39,24 +40,38 @@ class DeviceStatus:
 
 @dataclass
 class DeviceSetup:
-    is_enabled: list[bool]
-    is_diode_mode: list[bool]
-    is_high_range: list[bool]
+    is_disabled: list[bool | None]
+    is_diode_mode: list[bool | None]
+    is_high_range: list[bool | None]
 
-    voltage_c: list[float]
-    current_c: list[float]
-    voltage_e: list[float]
-    current_e: list[float]
+    voltage_c: list[float | None]
+    current_c: list[float | None]
+    voltage_e: list[float | None]
+    current_e: list[float | None]
 
     def __init__(self) -> None:
-        self.is_disabled = [True] * CHANNEL_COUNT
-        self.is_diode_mode = [True] * CHANNEL_COUNT
-        self.is_high_range = [True] * CHANNEL_COUNT
+        self.is_disabled = [None] * CHANNEL_COUNT
+        self.is_diode_mode = [None] * CHANNEL_COUNT
+        self.is_high_range = [None] * CHANNEL_COUNT
 
-        self.voltage_c = [0.0] * CHANNEL_COUNT
-        self.current_c = [0.0] * CHANNEL_COUNT
-        self.voltage_e = [0.0] * CHANNEL_COUNT
-        self.current_e = [0.0] * CHANNEL_COUNT
+        self.voltage_c = [None] * CHANNEL_COUNT
+        self.current_c = [None] * CHANNEL_COUNT
+        self.voltage_e = [None] * CHANNEL_COUNT
+        self.current_e = [None] * CHANNEL_COUNT
+
+    @classmethod
+    def zeroed(cls) -> Self:
+        setup = cls()
+        setup.is_disabled = [False] * CHANNEL_COUNT
+        setup.is_diode_mode = [False] * CHANNEL_COUNT
+        setup.is_high_range = [False] * CHANNEL_COUNT
+
+        setup.voltage_c = [0.0] * CHANNEL_COUNT
+        setup.current_c = [0.0] * CHANNEL_COUNT
+        setup.voltage_e = [0.0] * CHANNEL_COUNT
+        setup.current_e = [0.0] * CHANNEL_COUNT
+
+        return setup
 
 
 @dataclass
@@ -72,7 +87,7 @@ class DeviceMeasured:
 
 
 class TickWorker(QObject):
-    def __init__(self, tick_callback: callable[[], None]) -> None:
+    def __init__(self, tick_callback: Callable[[], None]) -> None:
         super().__init__()
         self.tick_callback = tick_callback
         self.timer = QTimer(self)
@@ -92,19 +107,19 @@ class TickWorker(QObject):
             logger.error(e, exc_info=True)
 
         elapsed = (time.time() - start_time) * 1000
-
-        delay = max(0, REFRESH_INTERVAL_MS - elapsed)
+        delay = int(max(0, REFRESH_INTERVAL_MS - elapsed))
         self.timer.start(delay)
 
+
 class EFE(QObject):
-    setup_updated = Signal(DeviceSetup)
+    force_disable = Signal()
     status_updated = Signal(DeviceStatus)
     measured_updated = Signal(DeviceMeasured)
 
     def __init__(self, ip: str) -> None:
         super().__init__()
-        self._current = DeviceSetup()
-        self._new = DeviceSetup()
+        self._setup = DeviceSetup.zeroed()
+        self._pending_setup = DeviceSetup()
 
         self._device = RealDevice(ip)
         self._device_connected = False
@@ -123,11 +138,11 @@ class EFE(QObject):
         else:
             logger.info("Device not connected. Attempting to connect...")
             self.connect_device()
-            if self._device_connected:
-                self.query_device_setup()
 
     @Slot()
     def stop_worker(self) -> None:
+        if self._worker is None:
+            raise RuntimeError("Worker is None when it should not be.")
         self._worker.timer.stop()
         if self._device is not None:
             self._device.close()
@@ -135,45 +150,47 @@ class EFE(QObject):
 
     @Slot(int, bool)
     def set_disabled(self, channel: int, is_disabled: bool) -> None:
-        self._new.is_disabled[channel] = is_disabled
+        self._pending_setup.is_disabled[channel] = is_disabled
 
     @Slot(int, bool)
     def set_diode_mode(self, channel: int, is_diode_mode: bool) -> None:
-        self._new.is_diode_mode[channel] = is_diode_mode
+        self._pending_setup.is_diode_mode[channel] = is_diode_mode
 
     @Slot(int, bool)
     def set_high_range(self, channel: int, is_high_range: bool) -> None:
-        self._new.is_high_range[channel] = is_high_range
+        self._pending_setup.is_high_range[channel] = is_high_range
 
     @Slot(int, VariableType, float)
     def set_value(self, channel: int, variable_type: VariableType, value: float) -> None:
         if variable_type == VariableType.VOLTAGE_C:
-            self._new.voltage_c[channel] = value
+            self._pending_setup.voltage_c[channel] = value
         elif variable_type == VariableType.CURRENT_C:
-            self._new.current_c[channel] = value / 1e6
+            self._pending_setup.current_c[channel] = value / 1e6
         elif variable_type == VariableType.VOLTAGE_E:
-            self._new.voltage_e[channel] = value
+            self._pending_setup.voltage_e[channel] = value
         elif variable_type == VariableType.CURRENT_E:
-            self._new.current_e[channel] = value / 1e6
+            self._pending_setup.current_e[channel] = value / 1e6
 
     def connect_device(self) -> None:
         try:
             self._device.open()
+            self._pending_setup = self._setup
+            self._setup = DeviceSetup()
             self._device_connected = True
             self.status_updated.emit(DeviceStatus.ok())
+            self.force_disable.emit()
         except DeviceConnectionError as e:
             self.status_updated.emit(DeviceStatus(DeviceStatusKind.CONNECTION_ERROR, str(e)))
 
     def poll_device(self) -> None:
         try:
+            measured = DeviceMeasured()
             for i in range(CHANNEL_COUNT):
-                if not self._current.is_disabled[i]:
-                    measured = DeviceMeasured()
-                    measured.voltage_c[i] = float(self._device.query(f"MEAS{i + 1}:VOLTC?"))
-                    measured.current[i] = float(self._device.query(f"MEAS{i + 1}:CURR?")) * 1e6
-                    if not self._current.is_diode_mode[i]:
-                        measured.voltage_e[i] = float(self._device.query(f"MEAS{i + 1}:VOLTE?"))
-                    self.measured_updated.emit(measured)
+                measured.voltage_c[i] = float(self._device.query(f"MEAS{i + 1}:VOLTC?"))
+                measured.current[i] = float(self._device.query(f"MEAS{i + 1}:CURR?")) * 1e6
+                if not self._setup.is_diode_mode[i]:
+                    measured.voltage_e[i] = float(self._device.query(f"MEAS{i + 1}:VOLTE?"))
+            self.measured_updated.emit(measured)
         except DeviceIOError as e:
             logger.error(f"Error occurred while polling device: {e}")
             self.status_updated.emit(DeviceStatus(DeviceStatusKind.IO_ERROR, str(e)))
@@ -182,71 +199,49 @@ class EFE(QObject):
             self._device_connected = False
 
     def update_device(self) -> None:
+        print("Update")
         try:
             for i in range(CHANNEL_COUNT):
-                if self._current.is_disabled[i] != self._new.is_disabled[i]:
-                    if self._new.is_disabled[i]:
+                if self._setup.is_disabled[i] != self._pending_setup.is_disabled[i]:
+                    if self._pending_setup.is_disabled[i]:
                         self._device.write(f"OUTP{i + 1} OFF")
                     else:
                         self._device.write(f"OUTP{i + 1} ON")
-                    self._current.is_disabled[i] = self._new.is_disabled[i]
+                    self._setup.is_disabled[i] = self._pending_setup.is_disabled[i]
 
-                if self._current.is_diode_mode[i] != self._new.is_diode_mode[i]:
-                    if self._new.is_diode_mode[i]:
+                if self._setup.is_diode_mode[i] != self._pending_setup.is_diode_mode[i]:
+                    if self._pending_setup.is_diode_mode[i]:
                         self._device.write(f"MODE{i + 1}:DIODE")
                     else:
                         self._device.write(f"MODE{i + 1}:NORMAL")
-                    self._current.is_diode_mode[i] = self._new.is_diode_mode[i]
+                    self._setup.is_diode_mode[i] = self._pending_setup.is_diode_mode[i]
 
-                if self._current.is_high_range[i] != self._new.is_high_range[i]:
-                    if self._new.is_high_range[i]:
+                if self._setup.is_high_range[i] != self._pending_setup.is_high_range[i]:
+                    if self._pending_setup.is_high_range[i]:
                         self._device.write(f"SOUR{i + 1}:CURR:RANG 1e-4")
                     else:
                         self._device.write(f"SOUR{i + 1}:CURR:RANG 1e-6")
-                    self._current.is_high_range[i] = self._new.is_high_range[i]
+                    self._setup.is_high_range[i] = self._pending_setup.is_high_range[i]
 
-                if self._current.voltage_c[i] != self._new.voltage_c[i]:
-                    self._device.write(f"SOUR{i + 1}:VOLTC {self._new.voltage_c[i]}")
-                    self._current.voltage_c[i] = self._new.voltage_c[i]
+                if self._setup.voltage_c[i] != self._pending_setup.voltage_c[i]:
+                    self._device.write(f"SOUR{i + 1}:VOLTC {self._pending_setup.voltage_c[i]}")
+                    self._setup.voltage_c[i] = self._pending_setup.voltage_c[i]
 
-                if self._current.current_c[i] != self._new.current_c[i]:
-                    self._device.write(f"SOUR{i + 1}:CURRC {self._new.current_c[i]}")
-                    self._current.current_c[i] = self._new.current_c[i]
+                if self._setup.current_c[i] != self._pending_setup.current_c[i]:
+                    self._device.write(f"SOUR{i + 1}:CURRC {self._pending_setup.current_c[i]}")
+                    self._setup.current_c[i] = self._pending_setup.current_c[i]
 
-                if not self._current.is_diode_mode[i]:
-                    if self._current.voltage_e[i] != self._new.voltage_e[i]:
-                        self._device.write(f"SOUR{i + 1}:VOLTE {self._new.voltage_e[i]}")
-                        self._current.voltage_e[i] = self._new.voltage_e[i]
+                if not self._setup.is_diode_mode[i]:
+                    if self._setup.voltage_e[i] != self._pending_setup.voltage_e[i]:
+                        self._device.write(f"SOUR{i + 1}:VOLTE {self._pending_setup.voltage_e[i]}")
+                        self._setup.voltage_e[i] = self._pending_setup.voltage_e[i]
 
-                    if self._current.current_e[i] != self._new.current_e[i]:
-                        self._device.write(f"SOUR{i + 1}:CURRE {self._new.current_e[i]}")
-                        self._current.current_e[i] = self._new.current_e[i]
+                    if self._setup.current_e[i] != self._pending_setup.current_e[i]:
+                        self._device.write(f"SOUR{i + 1}:CURRE {self._pending_setup.current_e[i]}")
+                        self._setup.current_e[i] = self._pending_setup.current_e[i]
 
         except DeviceIOError as e:
             logger.error(f"Error occurred while updating device: {e}")
-            self.status_updated.emit(DeviceStatus(DeviceStatusKind.IO_ERROR, str(e)))
-        except DeviceDisconnectedError as e:
-            self.status_updated.emit(DeviceStatus(DeviceStatusKind.DISCONNECTED, str(e)))
-            self._device_connected = False
-
-    def query_device_setup(self) -> None:
-        logger.info("Querying device setup...")
-        try:
-            for i in range(CHANNEL_COUNT):
-                self._current.is_disabled[i] = self._device.query(f"OUTP{i + 1}?") == "OFF"
-                # TODO: doesn't exist yet
-                # self._current_values.is_diode_mode[i] = self._device.query(f"MODE{i + 1}?") == "DIODE"
-                # TODO: make this better
-                self._current.is_high_range[i] = float(self._device.query(f"SOUR{i + 1}:CURR:RANG?")) > 1e-5
-
-                self._current.voltage_c[i] = float(self._device.query(f"SOUR{i + 1}:VOLTC?"))
-                self._current.current_c[i] = float(self._device.query(f"SOUR{i + 1}:CURRC?")) * 1e6
-                self._current.voltage_e[i] = float(self._device.query(f"SOUR{i + 1}:VOLTE?"))
-                self._current.current_e[i] = float(self._device.query(f"SOUR{i + 1}:CURRE?")) * 1e6
-
-            self.setup_updated.emit(self._current)
-        except DeviceIOError as e:
-            logger.error(f"Error occurred while querying device setup: {e}")
             self.status_updated.emit(DeviceStatus(DeviceStatusKind.IO_ERROR, str(e)))
         except DeviceDisconnectedError as e:
             self.status_updated.emit(DeviceStatus(DeviceStatusKind.DISCONNECTED, str(e)))
@@ -281,7 +276,6 @@ class DeviceConnectionError(Exception):
 
 class DeviceIOError(Exception):
     pass
-
 
 
 class RealDevice(Device):
@@ -337,18 +331,17 @@ class RealDevice(Device):
                     pos = self._buffer.find(terminator) + len(terminator)
                     data, self._buffer = self._buffer[:pos], self._buffer[pos:]
                     return data
-                
+
                 chunk = self._sock.recv(4096)
                 if not chunk:
                     raise DeviceDisconnectedError("Socket closed by remote while reading")
                 self._buffer += chunk
         except TimeoutError as e:
-            raise DeviceDisconnectedError("Read timeout - no data") from e # decide how to handle
+            raise DeviceDisconnectedError("Read timeout - no data") from e  # decide how to handle
         except ConnectionResetError as e:
             raise DeviceDisconnectedError(f"Connection reset while reading: {e}") from e
         except OSError as e:
             raise DeviceIOError(f"Socket error during read: {e}") from e
-        return data
 
     def write(self, command: str) -> None:
         """Send a command (appends newline)."""
@@ -358,7 +351,7 @@ class RealDevice(Device):
             cmd_bytes = (command + "\n").encode("ascii")
             logger.info(f"Sending: {command}")
             self._send(cmd_bytes)
-        except (DeviceDisconnectedError, DeviceIOError):
+        except DeviceDisconnectedError, DeviceIOError:
             raise
         except Exception as e:
             raise DeviceIOError(f"Unexpected error while writing: {e}") from e
@@ -373,7 +366,7 @@ class RealDevice(Device):
             ret = response.decode("ascii").rstrip("\n")
             logger.info(f"Received: {ret}")
             return ret
-        except (DeviceDisconnectedError, DeviceIOError):
+        except DeviceDisconnectedError, DeviceIOError:
             raise
         except Exception as e:
             raise DeviceIOError(f"Unexpected error during query: {e}") from e
@@ -384,6 +377,7 @@ class RealDevice(Device):
             self._sock.close()
             self._sock = None
         self._stop.set()
+
 
 class DebugDevice(Device):
     def __init__(self, ip: str) -> None:

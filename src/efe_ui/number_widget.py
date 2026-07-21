@@ -164,12 +164,12 @@ class NumberWidget(QWidget):
 
     def handle_increment(self, digit_index: int) -> None:
         mult = self._calculate_multiplier(digit_index)
-        value = self._value + mult if self._value is not None else mult
+        value = self._value + mult if self._value is not None else None
         self.set_value(value)
 
     def handle_decrement(self, digit_index: int) -> None:
         mult = self._calculate_multiplier(digit_index)
-        value = self._value - mult if self._value is not None else -mult
+        value = self._value - mult if self._value is not None else None
         self.set_value(value)
 
     def handle_clicked(self, digit_index: int) -> None:

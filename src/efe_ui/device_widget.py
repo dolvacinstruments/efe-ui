@@ -1,13 +1,13 @@
 from functools import partial
 
-from PySide6.QtCore import QMetaObject, Qt, QThread, Signal, Slot
+from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtWidgets import QHBoxLayout, QMessageBox, QSizePolicy, QVBoxLayout, QWidget
 
 from efe_ui.channel_widget import (
     ChannelWidget,
 )
 from efe_ui.constants import CHANNEL_COUNT, VariableType
-from efe_ui.device import EFE, DeviceMeasured, DeviceSetup, DeviceStatus, DeviceStatusKind
+from efe_ui.device import EFE, DeviceMeasured, DeviceStatus, DeviceStatusKind
 from efe_ui.ui_helpers import create_title_bar_button, create_title_bar_label
 
 
@@ -24,7 +24,6 @@ class DeviceWidget(QWidget):
         self._setup_device()
         self._setup_ui()
         self._connect_signals()
-        QMetaObject.invokeMethod(self._device, "start_loop", Qt.ConnectionType.QueuedConnection)
 
     def _setup_device(self) -> None:
         self._device = EFE(self._ip)
@@ -87,7 +86,7 @@ class DeviceWidget(QWidget):
         self.disconnect_requested.connect(self._device.stop_worker)
         self._device.measured_updated.connect(self.handle_measured_update)
         self._device.status_updated.connect(self.update_device_status)
-        self._device.setup_updated.connect(self.handle_setup_update)
+        self._device.force_disable.connect(self.handle_force_disable)
         self._thread.finished.connect(self._handle_thread_exit)
 
         for i, channel_widget in enumerate(self._channel_widgets):
@@ -109,21 +108,19 @@ class DeviceWidget(QWidget):
     def handle_measured_update(self, measured: DeviceMeasured) -> None:
         for i in range(CHANNEL_COUNT):
             channel_widget = self._channel_widgets[i]
-            channel_widget.set_measure_value(VariableType.VOLTAGE_C, measured.voltage_c[i])
-            channel_widget.set_measure_value(VariableType.CURRENT_C, measured.current[i])
-            channel_widget.set_measure_value(VariableType.VOLTAGE_E, measured.voltage_e[i])
+            if not channel_widget.is_disabled():
+                channel_widget.set_measure_value(VariableType.VOLTAGE_C, measured.voltage_c[i])
+                channel_widget.set_measure_value(VariableType.CURRENT_C, measured.current[i])
+                channel_widget.set_measure_value(VariableType.VOLTAGE_E, measured.voltage_e[i])
+            else:
+                channel_widget.set_measure_value(VariableType.VOLTAGE_C, None)
+                channel_widget.set_measure_value(VariableType.CURRENT_C, None)
+                channel_widget.set_measure_value(VariableType.VOLTAGE_E, None)
 
-    @Slot(DeviceSetup)
-    def handle_setup_update(self, setup: DeviceSetup) -> None:
+    @Slot()
+    def handle_force_disable(self) -> None:
         for i in range(CHANNEL_COUNT):
-            channel_widget = self._channel_widgets[i]
-            channel_widget.set_is_disabled(setup.is_disabled[i])
-            channel_widget.set_is_diode_mode(setup.is_diode_mode[i])
-            channel_widget.set_is_high_range(setup.is_high_range[i])
-            channel_widget.set_set_value(VariableType.VOLTAGE_C, setup.voltage_c[i])
-            channel_widget.set_set_value(VariableType.CURRENT_C, setup.current_c[i])
-            channel_widget.set_set_value(VariableType.VOLTAGE_E, setup.voltage_e[i])
-            channel_widget.set_set_value(VariableType.CURRENT_E, setup.current_e[i])
+            self._channel_widgets[i].set_is_disabled(True)
 
     @Slot(VariableType, float, int)
     def set_set_value(self, variable_type: VariableType, value: float, channel: int) -> None:
@@ -167,8 +164,6 @@ class DeviceWidget(QWidget):
             self._msgbox = QMessageBox(self)
             self._msgbox.setIcon(QMessageBox.Icon.Critical)
             self._msgbox.setWindowTitle("Device Error")
-            self._msgbox.setText(
-                f"Device {self._device_name} ({self._ip}) encountered an error: {status.message}"
-            )
+            self._msgbox.setText(f"Device {self._device_name} ({self._ip}) encountered an error: {status.message}")
 
             self._msgbox.show()

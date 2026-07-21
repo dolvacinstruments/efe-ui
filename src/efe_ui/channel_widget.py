@@ -238,6 +238,7 @@ class ChannelWidget(QWidget):
 
     def set_set_value(self, variable_type: VariableType, value: float) -> None:
         if variable_type == VariableType.VOLTAGE_C:
+            print(f"Setting VC value to {value}")
             self.vc_set_widget.set_value(value)
         elif variable_type == VariableType.CURRENT_C:
             self.ic_set_widget.set_value(value)
@@ -254,6 +255,9 @@ class ChannelWidget(QWidget):
 
     def set_is_high_range(self, is_high_range: bool) -> None:
         self.range_switch.set_state(is_high_range)
+
+    def is_disabled(self) -> bool:
+        return self._is_disabled
 
 
 ROW_LABEL_WIDTH: int | None = None
