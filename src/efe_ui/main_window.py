@@ -1,5 +1,9 @@
+import json
 from functools import partial
+from pathlib import Path
 
+from platformdirs import user_data_dir
+from pydantic import ValidationError
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
@@ -7,6 +11,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
     QMainWindow,
+    QMessageBox,
     QScrollArea,
     QSizePolicy,
     QVBoxLayout,
@@ -15,9 +20,13 @@ from PySide6.QtWidgets import (
 
 from efe_ui.add_device_dialog import AddDeviceDialog
 from efe_ui.channel_widget import ChannelWidget
+from efe_ui.config import DevicesConfig
 from efe_ui.constants import CHANNEL_COUNT
 from efe_ui.device_widget import DeviceWidget
 from efe_ui.load_devices_dialog import LoadDevicesDialog
+from efe_ui.save_devices_dialog import SaveDevicesDialog
+
+APP_NAME = "EFE-UI"
 
 
 class MainWindow(QMainWindow):
@@ -27,6 +36,9 @@ class MainWindow(QMainWindow):
 
         self.setup_ui()
         self.setup_menu()
+        path = Path(user_data_dir(appname=APP_NAME, ensure_exists=True)) / "devices.json"
+        if path.exists():
+            self.load_config(path)
 
     def setup_ui(self) -> None:
         container = QWidget(self)
@@ -54,6 +66,10 @@ class MainWindow(QMainWindow):
         load_devices_action.triggered.connect(self.show_load_devices_dialog)
         devices_menu.addAction(load_devices_action)
 
+        save_devices_action = QAction("Save Devices to file...", self)
+        save_devices_action.triggered.connect(self.show_save_devices_dialog)
+        devices_menu.addAction(save_devices_action)
+
     def show_add_device_dialog(self) -> None:
         dialog = AddDeviceDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
@@ -62,11 +78,15 @@ class MainWindow(QMainWindow):
 
     def show_load_devices_dialog(self) -> None:
         dialog = LoadDevicesDialog(self)
-        config = dialog.get_data()
+        file_path = dialog.get_path()
+        if file_path is not None:
+            self.load_config(file_path)
 
-        if config is not None:
-            for device in config.root:
-                self.add_device_widget(device.ip, device.name)
+    def show_save_devices_dialog(self) -> None:
+        dialog = SaveDevicesDialog(self)
+        file_path = dialog.get_path()
+        if file_path is not None:
+            self.save_config(file_path)
 
     def add_device_area(self, layout: QHBoxLayout) -> None:
         self.scroll_area = FitScrollArea(self)
@@ -97,6 +117,37 @@ class MainWindow(QMainWindow):
             self._global_widget.is_diode_mode_changed.connect(partial(device_widget.set_is_diode_mode, channel=i))
             self._global_widget.is_high_range_changed.connect(partial(device_widget.set_is_high_range, channel=i))
             self._global_widget.value_changed.connect(partial(device_widget.set_set_value, channel=i))
+
+        self.save_config(Path(user_data_dir(appname=APP_NAME, ensure_exists=True)) / "devices.json")
+
+    def save_config(self, path: Path) -> None:
+        ips = []
+        names = []
+        for widget in self.area_widget.findChildren(DeviceWidget):
+            ips.append(widget.get_ip())
+            names.append(widget.get_name())
+        try:
+            DevicesConfig.from_lists(names, ips).to_file(path)
+        except Exception as e:
+            QMessageBox.critical(self.parentWidget(), "Error", f"Could not save file:\n{str(e)}")
+
+    def load_config(self, file_path: Path) -> None:
+        try:
+            devices_config = DevicesConfig.from_file(file_path)
+            for device in devices_config.root:
+                self.add_device_widget(device.ip, device.name)
+
+        except json.JSONDecodeError:
+            QMessageBox.critical(self.parentWidget(), "Error", "Invalid JSON format!")
+        except ValidationError as e:
+            error_msg = f"Data validation failed for {file_path}:\n\n"
+            for err in e.errors():
+                loc = " -> ".join(str(line) for line in err["loc"])
+                msg = err["msg"]
+                error_msg += f"{loc}: {msg}\n"
+            QMessageBox.critical(self.parentWidget(), "Error", error_msg)
+        except Exception as e:
+            QMessageBox.critical(self.parentWidget(), "Error", f"Could not read file:\n{str(e)}")
 
 
 class FitScrollArea(QScrollArea):

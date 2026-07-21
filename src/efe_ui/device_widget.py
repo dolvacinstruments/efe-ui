@@ -167,3 +167,9 @@ class DeviceWidget(QWidget):
             self._msgbox.setText(f"Device {self._device_name} ({self._ip}) encountered an error: {status.message}")
 
             self._msgbox.show()
+
+    def get_ip(self) -> str:
+        return self._ip
+
+    def get_name(self) -> str:
+        return self._device_name

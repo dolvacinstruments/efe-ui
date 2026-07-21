@@ -3,12 +3,12 @@ from pathlib import Path
 from PySide6.QtWidgets import QFileDialog, QWidget
 
 
-class LoadDevicesDialog(QFileDialog):
+class SaveDevicesDialog(QFileDialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
-        self.setAcceptMode(QFileDialog.AcceptMode.AcceptOpen)
-        self.setFileMode(QFileDialog.FileMode.ExistingFile)
+        self.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
+        self.setFileMode(QFileDialog.FileMode.AnyFile)
         self.setNameFilter("JSON Files (*.json);;All Files (*)")
 
     def get_path(self) -> Path | None:
