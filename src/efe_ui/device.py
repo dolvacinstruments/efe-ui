@@ -62,9 +62,9 @@ class DeviceSetup:
     @classmethod
     def zeroed(cls) -> Self:
         setup = cls()
-        setup.is_disabled = [False] * CHANNEL_COUNT
-        setup.is_diode_mode = [False] * CHANNEL_COUNT
-        setup.is_high_range = [False] * CHANNEL_COUNT
+        setup.is_disabled = [True] * CHANNEL_COUNT
+        setup.is_diode_mode = [True] * CHANNEL_COUNT
+        setup.is_high_range = [True] * CHANNEL_COUNT
 
         setup.voltage_c = [0.0] * CHANNEL_COUNT
         setup.current_c = [0.0] * CHANNEL_COUNT
@@ -118,8 +118,8 @@ class EFE(QObject):
 
     def __init__(self, ip: str) -> None:
         super().__init__()
-        self._setup = DeviceSetup.zeroed()
-        self._pending_setup = DeviceSetup()
+        self._setup = DeviceSetup()
+        self._pending_setup = DeviceSetup.zeroed()
 
         self._device = RealDevice(ip)
         self._device_connected = False
@@ -174,6 +174,7 @@ class EFE(QObject):
     def connect_device(self) -> None:
         try:
             self._device.open()
+            print(f"Setting pending to {self._setup}")
             self._pending_setup = self._setup
             self._setup = DeviceSetup()
             self._device_connected = True
