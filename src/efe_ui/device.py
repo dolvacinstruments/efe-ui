@@ -174,8 +174,6 @@ class EFE(QObject):
     def connect_device(self) -> None:
         try:
             self._device.open()
-            print(f"Setting pending to {self._setup}")
-            self._pending_setup = self._setup
             self._setup = DeviceSetup()
             self._device_connected = True
             self.status_updated.emit(DeviceStatus.ok())
