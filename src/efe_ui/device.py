@@ -184,11 +184,17 @@ class EFE(QObject):
     def poll_device(self) -> None:
         try:
             measured = DeviceMeasured()
+            response = self._device.query("MEAS:ALL?")
+            raw_values = response.split(",")
+            if len(raw_values) != CHANNEL_COUNT * 3:
+                raise RuntimeError(f"Unexpected number of values in response: {len(raw_values)}")
+            values = [float(v) for v in raw_values]
+
             for i in range(CHANNEL_COUNT):
-                measured.voltage_c[i] = float(self._device.query(f"MEAS{i + 1}:VOLTC?"))
-                measured.current[i] = float(self._device.query(f"MEAS{i + 1}:CURR?")) * 1e6
-                if not self._setup.is_diode_mode[i]:
-                    measured.voltage_e[i] = float(self._device.query(f"MEAS{i + 1}:VOLTE?"))
+                measured.current[i] = values.pop(0) * 1e6 # microamps
+                measured.voltage_c[i] = values.pop(0)
+                measured.voltage_e[i] = values.pop(0)
+                
             self.measured_updated.emit(measured)
         except DeviceIOError as e:
             logger.error(f"Error occurred while polling device: {e}")
