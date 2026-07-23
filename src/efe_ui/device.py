@@ -13,7 +13,6 @@ from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
 from efe_ui.constants import CHANNEL_COUNT, VariableType
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -191,10 +190,10 @@ class EFE(QObject):
             values = [float(v) for v in raw_values]
 
             for i in range(CHANNEL_COUNT):
-                measured.current[i] = values.pop(0) * 1e6 # microamps
+                measured.current[i] = values.pop(0) * 1e6  # microamps
                 measured.voltage_c[i] = values.pop(0)
                 measured.voltage_e[i] = values.pop(0)
-                
+
             self.measured_updated.emit(measured)
         except DeviceIOError as e:
             logger.error(f"Error occurred while polling device: {e}")
@@ -204,7 +203,6 @@ class EFE(QObject):
             self._device_connected = False
 
     def update_device(self) -> None:
-        print("Update")
         try:
             for i in range(CHANNEL_COUNT):
                 if self._setup.is_disabled[i] != self._pending_setup.is_disabled[i]:

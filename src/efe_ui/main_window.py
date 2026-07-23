@@ -4,7 +4,7 @@ from pathlib import Path
 
 from platformdirs import user_data_dir
 from pydantic import ValidationError
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QObject, QSize, Qt, QThread, QTimer
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QAbstractScrollArea,
@@ -22,8 +22,10 @@ from efe_ui.add_device_dialog import AddDeviceDialog
 from efe_ui.channel_widget import ChannelWidget
 from efe_ui.config import DevicesConfig
 from efe_ui.constants import CHANNEL_COUNT
+from efe_ui.device_logs import DeviceLogs
 from efe_ui.device_widget import DeviceWidget
 from efe_ui.load_devices_dialog import LoadDevicesDialog
+from efe_ui.main import ARGS
 from efe_ui.save_devices_dialog import SaveDevicesDialog
 
 APP_NAME = "EFE-UI"
@@ -39,6 +41,12 @@ class MainWindow(QMainWindow):
         path = Path(user_data_dir(appname=APP_NAME, ensure_exists=True)) / "devices.json"
         if path.exists():
             self.load_config(path)
+        if ARGS is not None and ARGS.log:
+            self._log_thread = QThread(self)
+            self._device_logs = DeviceLogs()
+            self._device_logs.moveToThread(self._log_thread)
+            self._log_thread.started.connect(self._device_logs.loop)
+            self._log_thread.start()
 
     def setup_ui(self) -> None:
         container = QWidget(self)
@@ -111,6 +119,7 @@ class MainWindow(QMainWindow):
         device_widget = DeviceWidget(name, ip, self)
         self.area_layout.addWidget(device_widget)
         self.scroll_area.updateGeometry()
+        device_widget.destroyed.connect(self.handle_destroyed)
 
         for i in range(CHANNEL_COUNT):
             self._global_widget.is_disabled_changed.connect(partial(device_widget.set_is_disabled, channel=i))
@@ -118,6 +127,9 @@ class MainWindow(QMainWindow):
             self._global_widget.is_high_range_changed.connect(partial(device_widget.set_is_high_range, channel=i))
             self._global_widget.value_changed.connect(partial(device_widget.set_set_value, channel=i))
 
+        self.save_auto_config()
+
+    def save_auto_config(self) -> None:
         self.save_config(Path(user_data_dir(appname=APP_NAME, ensure_exists=True)) / "devices.json")
 
     def save_config(self, path: Path) -> None:
@@ -148,6 +160,9 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self.parentWidget(), "Error", error_msg)
         except Exception as e:
             QMessageBox.critical(self.parentWidget(), "Error", f"Could not read file:\n{str(e)}")
+
+    def handle_destroyed(self, obj: QObject) -> None:
+        QTimer.singleShot(0, self.save_auto_config)  # Delay saving to ensure the widget is fully destroyedjd
 
 
 class FitScrollArea(QScrollArea):

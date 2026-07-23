@@ -1,4 +1,5 @@
 import argparse
+import logging
 import signal
 import sys
 
@@ -7,6 +8,8 @@ from PySide6.QtWidgets import QApplication
 
 from efe_ui.main_window import MainWindow
 
+ARGS = None
+
 
 def parse_args() -> tuple[argparse.Namespace, list[str]]:
     arg_parser = argparse.ArgumentParser(description="EFE-UI")
@@ -14,7 +17,13 @@ def parse_args() -> tuple[argparse.Namespace, list[str]]:
         "-d",
         "--debug",
         action="store_true",
-        help="Enable debug mod",
+        help="Enable debug mode",
+    )
+    arg_parser.add_argument(
+        "-l",
+        "--log",
+        action="store_true",
+        help="Enable device logs",
     )
     args = arg_parser.parse_known_args()
     return args
@@ -25,14 +34,16 @@ def handle_signal(signum: int, _) -> None:  # noqa: ANN001
 
 
 def main() -> None:
-    args, unknown_args = parse_args()
+    global ARGS
+    ARGS, unknown_args = parse_args()
 
     app = QApplication(sys.argv)
     app.setApplicationName("EFE-UI")
     app.setOrganizationName("Dolvac")
     app.setOrganizationDomain("dolvac.com")
 
-    if args.debug:
+    if ARGS.debug:
+        logging.basicConfig(level=logging.INFO)
         app.setStyleSheet("""
             QWidget {
                 border: 1px solid red;
