@@ -121,7 +121,7 @@ class EFE(QObject):
         self._setup = DeviceSetup()
         self._pending_setup = DeviceSetup.zeroed()
 
-        self._device = DebugDevice(ip)
+        self._device = RealDevice(ip)
         self._device_connected = False
         self._worker = None
 
