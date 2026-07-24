@@ -8,6 +8,7 @@ from efe_ui.channel_widget import (
 )
 from efe_ui.constants import CHANNEL_COUNT, VariableType
 from efe_ui.device import EFE, DeviceMeasured, DeviceStatus, DeviceStatusKind
+from efe_ui.number_widget import Value
 from efe_ui.ui_helpers import create_title_bar_button, create_title_bar_label
 
 
@@ -24,6 +25,7 @@ class DeviceWidget(QWidget):
         self._setup_device()
         self._setup_ui()
         self._connect_signals()
+        print(Value(0))
 
     def _setup_device(self) -> None:
         self._device = EFE(self._ip)
@@ -113,9 +115,9 @@ class DeviceWidget(QWidget):
                 channel_widget.set_measure_value(VariableType.CURRENT_C, measured.current[i])
                 channel_widget.set_measure_value(VariableType.VOLTAGE_E, measured.voltage_e[i])
             else:
-                channel_widget.set_measure_value(VariableType.VOLTAGE_C, None)
-                channel_widget.set_measure_value(VariableType.CURRENT_C, None)
-                channel_widget.set_measure_value(VariableType.VOLTAGE_E, None)
+                channel_widget.set_measure_value(VariableType.VOLTAGE_C, Value.invalid())
+                channel_widget.set_measure_value(VariableType.CURRENT_C, Value.invalid())
+                channel_widget.set_measure_value(VariableType.VOLTAGE_E, Value.invalid())
 
     @Slot()
     def handle_force_disable(self) -> None:
@@ -126,7 +128,7 @@ class DeviceWidget(QWidget):
     def set_set_value(self, variable_type: VariableType, value: float, channel: int) -> None:
         if channel < 0 or channel >= CHANNEL_COUNT:
             raise ValueError(f"Channel {channel} is out of range. Must be between 0 and {CHANNEL_COUNT - 1}.")
-        self._channel_widgets[channel].set_set_value(variable_type, value)
+        self._channel_widgets[channel].set_set_value(variable_type, Value(value))
 
     @Slot(bool, int)
     def set_is_disabled(self, is_disabled: bool, channel: int) -> None:

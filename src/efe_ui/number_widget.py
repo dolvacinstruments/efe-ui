@@ -1,4 +1,8 @@
+import math
+from dataclasses import dataclass
+from enum import Enum, auto
 from functools import partial
+from typing import Self
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFocusEvent, QKeyEvent
@@ -14,23 +18,66 @@ from efe_ui.digit_widget import DigitWidget, get_digit_width
 from .constants import DIGIT_FONT_SIZE
 
 
+class ValueCondition(Enum):
+    NORMAL = auto()
+    OVERLOAD = auto()
+    INVALID = auto()
+
+
+@dataclass(order=True, frozen=True)
+class Value:
+    number: float
+    condition: ValueCondition = ValueCondition.NORMAL
+
+    def __post_init__(self) -> None:
+        if math.isnan(self.number != self.number):
+            object.__setattr__(self, "condition", ValueCondition.INVALID)
+        elif self.number >= 9.9e37 or self.number <= -9.9e37:
+            object.__setattr__(self, "condition", ValueCondition.OVERLOAD)
+
+        if self.condition == ValueCondition.OVERLOAD:
+            object.__setattr__(self, "number", float("inf") if self.number > 0 else float("-inf"))
+        elif self.condition == ValueCondition.INVALID:
+            object.__setattr__(self, "number", float("nan"))
+
+    @classmethod
+    def invalid(cls) -> Self:
+        return cls(float("nan"), ValueCondition.INVALID)
+
+    def is_ok(self) -> bool:
+        return self.condition == ValueCondition.NORMAL
+
+    def is_overload(self) -> bool:
+        return self.condition == ValueCondition.OVERLOAD
+
+    def is_invalid(self) -> bool:
+        return self.condition == ValueCondition.INVALID
+
+    def get(self) -> float:
+        return self.number
+
+    def __float__(self) -> float:
+        return float(self.number)
+
+
 class NumberWidget(QWidget):
     number_changed = Signal(object)
 
     def __init__(
         self,
-        value: float | None,
+        value: Value,
         digit_count: int,
         point_position: int | None,
         min_value: float,
         max_value: float,
         editable: bool = True,
+        invert_controls: bool = False,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
 
-        self._value: float | None = value
         self._editable = editable
+        self._invert_controls = invert_controls
         self._selected_digit: int | None = None
 
         self._digit_count = digit_count
@@ -41,29 +88,30 @@ class NumberWidget(QWidget):
         self._digits: list[DigitWidget] = []
 
         self._setup_ui()
+        self._value = Value(0)
+        self.set_value(value)
 
-    def set_value(self, value: float | None) -> None:
-        if value is not None:
-            value = max(min(value, self._max_value), self._min_value)
-        if value == self._value:
-            return
-
-        self._value = value
-
+    def set_value(self, value: Value) -> None:
+        old_value = self._value
+        if value.is_ok() and (value.get() < self._min_value or value.get() > self._max_value):
+            self._value = Value(value.get(), ValueCondition.OVERLOAD)
+        else:
+            self._value = value
         self._update_value_display()
-        self.number_changed.emit(self._value)
+        if self._value != old_value:
+            self.number_changed.emit(self._value)
 
     def set_min_max(self, min_value: float, max_value: float) -> None:
         self._min_value = self._clamp_range(min_value)
         self._max_value = self._clamp_range(max_value)
-        if self._value is not None:
-            self.set_value(self._value)
+        self.set_value(self._value)
 
     def set_point_position(self, point_position: int | None) -> None:
         if self._selected_digit is not None:
             self.select_digit(None)
         self._point_position = point_position
         self._setup_number()
+        self.set_min_max(self._min_value, self._max_value)
         self._update_value_display()
 
     def set_digit_count(self, digit_count: int) -> None:
@@ -71,9 +119,10 @@ class NumberWidget(QWidget):
             self.select_digit(None)
         self._digit_count = digit_count
         self._setup_number()
+        self.set_min_max(self._min_value, self._max_value)
         self._update_value_display()
 
-    def get_value(self) -> float | None:
+    def get_value(self) -> Value:
         return self._value
 
     def set_editable(self, editable: bool) -> None:
@@ -121,14 +170,48 @@ class NumberWidget(QWidget):
             self.hlayout.insertWidget(dot_index + 1, self._dot_label, alignment=Qt.AlignmentFlag.AlignCenter)
 
     def _update_value_display(self) -> None:
-        for i, digit_widget in enumerate(reversed(self._digits)):
-            if self._value is None:
-                digit_widget.set_value(None)
-            else:
-                digit_value = int(abs(self._value) / self._calculate_multiplier(i)) % 10
-                digit_widget.set_value(digit_value)
+        if self._value.is_overload() and len(self._digits) > 1:
+            self._digits[-1].set_value("L")
+            self._digits[-2].set_value("O")
+            for digit_widget in self._digits[:-2]:
+                digit_widget.setVisible(False)
+            if self._dot_label is not None:
+                self._dot_label.setVisible(False)
+        elif self._value.is_overload() and len(self._digits) == 1:
+            self._digits[-1].set_value("O")
+            for digit_widget in self._digits[:-1]:
+                digit_widget.setVisible(False)
+            if self._dot_label is not None:
+                self._dot_label.setVisible(False)
+        else:
+            for i, digit_widget in enumerate(reversed(self._digits)):
+                digit_widget.setVisible(True)
+                if self._dot_label is not None:
+                    self._dot_label.setVisible(True)
+                if self._value.is_ok():
+                    mult = self._calculate_multiplier(i)
+                    digit_value = int(round(abs(float(self._value)), 10) // mult) % 10
+                    digit_widget.set_value(str(digit_value))
 
-        self._sign_label.setVisible(self._value is not None and self._value < 0)
+                elif self._value.is_invalid():
+                    digit_widget.set_value("-")
+
+                else:
+                    raise RuntimeError(f"Unknown value condition: {self._value.condition}")
+
+        self._sign_label.setVisible(self.calculate_sign_visibility())
+
+    def calculate_sign_visibility(self) -> bool:
+        if self._invert_controls:
+            if self._value.is_invalid() or self._value.is_overload():
+                return True
+            else:
+                return self._value.get() <= 0
+        else:
+            if self._value.is_invalid() or self._value.is_overload():
+                return False
+            else:
+                return self._value.get() < 0
 
     def _create_dot(self) -> QLabel:
         dot_label = QLabel(".", self)
@@ -163,14 +246,21 @@ class NumberWidget(QWidget):
             m = 10**self._digit_count - 1
         return max(min(value, m), -m)
 
+    def clamp_value(self, value: float) -> float:
+        return max(min(value, self._max_value), self._min_value)
+
     def handle_increment(self, digit_index: int) -> None:
         mult = self._calculate_multiplier(digit_index)
-        value = self._value + mult if self._value is not None else None
+        value = Value(
+            self.clamp_value((self._value.get() + mult) if not self._invert_controls else self._value.get() - mult)
+        )
         self.set_value(value)
 
     def handle_decrement(self, digit_index: int) -> None:
         mult = self._calculate_multiplier(digit_index)
-        value = self._value - mult if self._value is not None else None
+        value = Value(
+            self.clamp_value((self._value.get() - mult) if not self._invert_controls else self._value.get() + mult)
+        )
         self.set_value(value)
 
     def handle_clicked(self, digit_index: int) -> None:
@@ -178,24 +268,27 @@ class NumberWidget(QWidget):
 
     def focusInEvent(self, event: QFocusEvent) -> None:
         super().focusInEvent(event)
-        self.select_digit(self._selected_digit if self._selected_digit is not None else 0)
+        digit = self._selected_digit if self._selected_digit is not None else 0
+        self._update_digit_selection(digit)
 
     def focusOutEvent(self, event: QFocusEvent) -> None:
         super().focusOutEvent(event)
-        self.select_digit(None)
+        self._update_digit_selection(None)
 
     def select_digit(self, digit: int | None) -> None:
+        self._update_digit_selection(digit)
+        if digit is not None:
+            self.setFocus()
+
+    def _update_digit_selection(self, digit: int | None) -> None:
         for d in self._digits:
             d.set_selected(False)
         self._selected_digit = digit
-        if digit is not None:
+        if digit is not None and 0 <= digit < len(self._digits):
             self._digits[-digit - 1].set_selected(True)
-            self.setFocus()
-        else:
-            self.clearFocus()
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
-        if self._selected_digit is not None and self._value is not None and self._editable:
+        if self._selected_digit is not None and self._value.is_ok() and self._editable:
             if event.key() == Qt.Key.Key_Left:
                 if self._selected_digit < len(self._digits) - 1:
                     self.select_digit(self._selected_digit + 1)
@@ -217,9 +310,19 @@ class NumberWidget(QWidget):
             elif event.text().isdigit():
                 digit_value = int(event.text())
                 mult = self._calculate_multiplier(self._selected_digit)
-                current_digit_value = int(abs(self._value) / mult) % 10
-                value = self._value - (current_digit_value * mult) + (digit_value * mult)
-                self.set_value(value)
+                current_val = self._value.get()
+                mag = abs(current_val)
+                current_digit_value = int(round(mag, 10) // mult) % 10
+                new_mag = mag - (current_digit_value * mult) + (digit_value * mult)
+                if current_val < 0:
+                    new_value = -new_mag
+                elif current_val > 0:
+                    new_value = new_mag
+                else:
+                    new_value = -new_mag if self._invert_controls else new_mag
+
+                new_value = self.clamp_value(new_value)
+                self.set_value(Value(new_value))
 
             elif event.key() == Qt.Key.Key_Escape:
                 self.select_digit(None)

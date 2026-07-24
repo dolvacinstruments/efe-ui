@@ -22,7 +22,7 @@ from efe_ui.constants import (
     RowConfig,
     VariableType,
 )
-from efe_ui.number_widget import NumberWidget
+from efe_ui.number_widget import NumberWidget, Value
 from efe_ui.title_bar_switch import TitleBarSwitch
 from efe_ui.ui_helpers import create_title_bar_label
 
@@ -144,7 +144,14 @@ class ChannelWidget(QWidget):
         grid.addWidget(label, row, 0, alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
         measure_widget = NumberWidget(
-            None, config.digit_count_measure, config.point_position_measure, -float("inf"), float("inf"), False, self
+            Value.invalid(),
+            config.digit_count_measure,
+            config.point_position_measure,
+            -float("inf"),
+            float("inf"),
+            False,
+            True,
+            self,
         )
         measure_widget.set_editable(False)
         if not config.readable:
@@ -152,10 +159,16 @@ class ChannelWidget(QWidget):
         grid.addWidget(measure_widget, row, 1, alignment=Qt.AlignmentFlag.AlignRight)
 
         set_widget = NumberWidget(
-            None, config.digit_count_set, config.point_position_set, config.minimum, config.maximum, True, self
+            Value(0),
+            config.digit_count_set,
+            config.point_position_set,
+            config.minimum,
+            config.maximum,
+            True,
+            True,
+            self,
         )
         set_widget.set_editable(True)
-        set_widget.set_value(0)
         grid.addWidget(set_widget, row, 2, alignment=Qt.AlignmentFlag.AlignRight)
 
         unit_label = QLabel(config.unit, self)
@@ -181,10 +194,10 @@ class ChannelWidget(QWidget):
     def _change_is_disabled(self, state: bool) -> None:
         self._is_disabled = state
         if self._is_disabled:
-            self.vc_measure_widget.set_value(None)
-            self.ic_measure_widget.set_value(None)
-            self.ve_measure_widget.set_value(None)
-            self.ie_measure_widget.set_value(None)
+            self.vc_measure_widget.set_value(Value.invalid())
+            self.ic_measure_widget.set_value(Value.invalid())
+            self.ve_measure_widget.set_value(Value.invalid())
+            self.ie_measure_widget.set_value(Value.invalid())
         self.is_disabled_changed.emit(state)
 
     def _change_is_high_range(self, state: bool) -> None:
@@ -228,7 +241,7 @@ class ChannelWidget(QWidget):
                 if widget is not None:
                     widget.setVisible(not hide)
 
-    def set_measure_value(self, variable_type: VariableType, value: float | None) -> None:
+    def set_measure_value(self, variable_type: VariableType, value: Value) -> None:
         if variable_type == VariableType.VOLTAGE_C:
             self.vc_measure_widget.set_value(value)
         elif variable_type == VariableType.CURRENT_C:
@@ -236,7 +249,7 @@ class ChannelWidget(QWidget):
         elif variable_type == VariableType.VOLTAGE_E:
             self.ve_measure_widget.set_value(value)
 
-    def set_set_value(self, variable_type: VariableType, value: float) -> None:
+    def set_set_value(self, variable_type: VariableType, value: Value) -> None:
         if variable_type == VariableType.VOLTAGE_C:
             print(f"Setting VC value to {value}")
             self.vc_set_widget.set_value(value)

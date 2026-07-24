@@ -12,6 +12,7 @@ from typing import Self
 from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
 from efe_ui.constants import CHANNEL_COUNT, VariableType
+from efe_ui.number_widget import Value
 
 logger = logging.getLogger(__name__)
 
@@ -75,14 +76,14 @@ class DeviceSetup:
 
 @dataclass
 class DeviceMeasured:
-    voltage_c: list[float | None]
-    voltage_e: list[float | None]
-    current: list[float | None]
+    voltage_c: list[Value]
+    voltage_e: list[Value]
+    current: list[Value]
 
     def __init__(self) -> None:
-        self.voltage_c = [None] * CHANNEL_COUNT
-        self.voltage_e = [None] * CHANNEL_COUNT
-        self.current = [None] * CHANNEL_COUNT
+        self.voltage_c = [Value.invalid()] * CHANNEL_COUNT
+        self.voltage_e = [Value.invalid()] * CHANNEL_COUNT
+        self.current = [Value.invalid()] * CHANNEL_COUNT
 
 
 class TickWorker(QObject):
@@ -120,7 +121,7 @@ class EFE(QObject):
         self._setup = DeviceSetup()
         self._pending_setup = DeviceSetup.zeroed()
 
-        self._device = RealDevice(ip)
+        self._device = DebugDevice(ip)
         self._device_connected = False
         self._worker = None
 
@@ -190,9 +191,9 @@ class EFE(QObject):
             values = [float(v) for v in raw_values]
 
             for i in range(CHANNEL_COUNT):
-                measured.current[i] = values.pop(0) * 1e6  # microamps
-                measured.voltage_c[i] = values.pop(0)
-                measured.voltage_e[i] = values.pop(0)
+                measured.current[i] = Value(values.pop(0) * 1e6)  # microamps
+                measured.voltage_c[i] = Value(values.pop(0))
+                measured.voltage_e[i] = Value(values.pop(0))
 
             self.measured_updated.emit(measured)
         except DeviceIOError as e:
@@ -399,6 +400,13 @@ class DebugDevice(Device):
             return str(random.uniform(-1200.0, -1))
         elif "MEAS" in command and "CURR" in command:
             return str(random.uniform(0.0, 1.0))
+        elif "MEAS:ALL?" in command:
+            values = []
+            for _ in range(CHANNEL_COUNT):
+                values.append(str(random.uniform(-1.0e-6, 0.0)))  # current
+                values.append(str(random.uniform(-1200.0, -1.0)))  # voltage_c
+                values.append(str(random.uniform(-1200.0, -1.0)))  # voltage_e
+            return ",".join(values)
         raise RuntimeError("Unexpected query response.")
 
     def close(self) -> None:

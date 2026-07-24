@@ -161,8 +161,8 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self.parentWidget(), "Error", f"Could not read file:\n{str(e)}")
 
-    def handle_destroyed(self, obj: QObject) -> None:
-        QTimer.singleShot(0, self.save_auto_config)  # Delay saving to ensure the widget is fully destroyedjd
+    def handle_destroyed(self, _: QObject) -> None:
+        QTimer.singleShot(0, self.save_auto_config)  # Delay saving to ensure the widget is fully destroyed
 
 
 class FitScrollArea(QScrollArea):

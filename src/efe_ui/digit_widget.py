@@ -17,7 +17,7 @@ class DigitWidget(QWidget):
     def __init__(self, parent: QWidget | None = None, editable: bool = False, selected: bool = False) -> None:
         super().__init__(parent)
 
-        self._value: int | None = None
+        self._value: str = "-"
 
         self._is_editable = editable
         self._is_selected = selected
@@ -26,27 +26,29 @@ class DigitWidget(QWidget):
         self._setup_ui()
         self._connect_signals()
 
-    def set_value(self, value: None | int) -> None:
-        if value is not None and not (0 <= value <= 9):
-            raise ValueError("Digit value must be between 0 and 9 or None.")
+    def set_value(self, value: str) -> None:
         self._value = value
         self._digit_button.setText(self._get_text())
 
-        if value is None:
+        if value == "-":
             self._style_non_editable()
             self._style_unhovered()
             self._style_unselected()
-        else:
+        elif value.isdigit():
             if self._is_editable:
                 self._style_editable()
                 if self._is_hovered_over:
                     self._style_hovered()
             if self._is_selected:
                 self._style_selected()
+        else:
+            self._style_error()
+            self._style_unhovered()
+            self._style_unselected()
 
     def set_editable(self, editable: bool) -> None:
         self._is_editable = editable
-        if editable:
+        if editable and self._value.isdigit():
             self._style_editable()
             if self._is_hovered_over:
                 self._style_hovered()
@@ -109,6 +111,10 @@ class DigitWidget(QWidget):
 
         self._initial_style()
 
+        policy = self.sizePolicy()
+        policy.setRetainSizeWhenHidden(True)
+        self.setSizePolicy(policy)
+
     def _connect_signals(self) -> None:
         self._up_button.clicked.connect(self.incremented)
         self._digit_button.clicked.connect(self.clicked)
@@ -145,6 +151,18 @@ class DigitWidget(QWidget):
                 }
             """)
 
+    def _style_error(self) -> None:
+        for button in [self._up_button, self._digit_button, self._down_button]:
+            button.setEnabled(False)
+            button.setStyleSheet("""
+                QPushButton {
+                    color: red;
+                    background-color: transparent;
+                    border: none;
+                    padding: 0px;
+                }
+            """)
+
     def _style_selected(self) -> None:
         self._digit_button.setProperty("selected", True)
         self._digit_button.style().unpolish(self._digit_button)
@@ -164,12 +182,7 @@ class DigitWidget(QWidget):
             button.setVisible(False)
 
     def _get_text(self) -> str:
-        if self._value is None:
-            return "-"
-        else:
-            if not 0 <= self._value <= 9:
-                raise ValueError("Digit value must be between 0 and 9 or None.")
-            return str(self._value)
+        return self._value
 
     def _initial_style(self) -> None:
         for button in [self._up_button, self._digit_button, self._down_button]:
