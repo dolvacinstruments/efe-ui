@@ -189,8 +189,8 @@ class NumberWidget(QWidget):
                 if self._dot_label is not None:
                     self._dot_label.setVisible(True)
                 if self._value.is_ok():
-                    mult = self._calculate_multiplier(i)
-                    digit_value = int(round(abs(float(self._value)), 10) // mult) % 10
+                    rounded = round(self._value.get(), self._digit_count)
+                    digit_value = int(round(abs(rounded) / self._calculate_multiplier(i), self._digit_count)) % 10
                     digit_widget.set_value(str(digit_value))
 
                 elif self._value.is_invalid():
