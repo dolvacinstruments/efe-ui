@@ -25,7 +25,7 @@ from efe_ui.constants import CHANNEL_COUNT
 from efe_ui.device_logs import DeviceLogs
 from efe_ui.device_widget import DeviceWidget
 from efe_ui.load_devices_dialog import LoadDevicesDialog
-from efe_ui.main import ARGS
+from efe_ui.main import get_args
 from efe_ui.save_devices_dialog import SaveDevicesDialog
 
 APP_NAME = "EFE-UI"
@@ -41,7 +41,7 @@ class MainWindow(QMainWindow):
         path = Path(user_data_dir(appname=APP_NAME, ensure_exists=True)) / "devices.json"
         if path.exists():
             self.load_config(path)
-        if ARGS is not None and ARGS.log:
+        if get_args().log:
             self._log_thread = QThread(self)
             self._device_logs = DeviceLogs()
             self._device_logs.moveToThread(self._log_thread)
