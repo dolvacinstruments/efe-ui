@@ -24,12 +24,13 @@ class NumberWidget(QWidget):
         point_position: int | None,
         min_value: float,
         max_value: float,
+        editable: bool = True,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
 
         self._value: float | None = value
-        self._editable = True
+        self._editable = editable
         self._selected_digit: int | None = None
 
         self._digit_count = digit_count
