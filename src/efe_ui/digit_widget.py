@@ -39,8 +39,8 @@ class DigitWidget(QWidget):
         else:
             if self._is_editable:
                 self._style_editable()
-            if self._is_hovered_over:
-                self._style_hovered()
+                if self._is_hovered_over:
+                    self._style_hovered()
             if self._is_selected:
                 self._style_selected()
 
