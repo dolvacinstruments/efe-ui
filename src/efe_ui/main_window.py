@@ -19,13 +19,13 @@ from PySide6.QtWidgets import (
 )
 
 from efe_ui.add_device_dialog import AddDeviceDialog
+from efe_ui.args import get_args
 from efe_ui.channel_widget import ChannelWidget
 from efe_ui.config import DevicesConfig
 from efe_ui.constants import CHANNEL_COUNT
 from efe_ui.device_logs import DeviceLogs
 from efe_ui.device_widget import DeviceWidget
 from efe_ui.load_devices_dialog import LoadDevicesDialog
-from efe_ui.main import get_args
 from efe_ui.save_devices_dialog import SaveDevicesDialog
 
 APP_NAME = "EFE-UI"
