@@ -35,11 +35,6 @@ class Value:
         elif self.number >= 9.9e37 or self.number <= -9.9e37:
             object.__setattr__(self, "condition", ValueCondition.OVERLOAD)
 
-        if self.condition == ValueCondition.OVERLOAD:
-            object.__setattr__(self, "number", float("inf") if self.number > 0 else float("-inf"))
-        elif self.condition == ValueCondition.INVALID:
-            object.__setattr__(self, "number", float("nan"))
-
     @classmethod
     def invalid(cls) -> Self:
         return cls(float("nan"), ValueCondition.INVALID)
@@ -156,7 +151,8 @@ class NumberWidget(QWidget):
 
         # Create new digits and add
         for i in range(self._digit_count):
-            digit_widget = DigitWidget(self, editable=self._editable)
+            digit_widget = DigitWidget(self)
+            digit_widget.set_editable(self._editable)
             self._digits.append(digit_widget)
             self.hlayout.addWidget(digit_widget, alignment=Qt.AlignmentFlag.AlignCenter)
             digit_widget.clicked.connect(partial(self.handle_clicked, self._digit_count - i - 1))
@@ -170,45 +166,58 @@ class NumberWidget(QWidget):
             self.hlayout.insertWidget(dot_index + 1, self._dot_label, alignment=Qt.AlignmentFlag.AlignCenter)
 
     def _update_value_display(self) -> None:
-        if self._value.is_overload() and len(self._digits) > 1:
-            self._digits[-1].set_value("L")
-            self._digits[-2].set_value("O")
+        if (
+            self._value.is_overload()
+            and len(self._digits) > 1
+            and (self._value.get() <= float("-inf") or self._value.get() >= float("inf"))
+        ):
+            self._digits[-1].set_value("O")
+            self._digits[-2].set_value("L")
             for digit_widget in self._digits[:-2]:
                 digit_widget.setVisible(False)
+            for digit_widget in self._digits:
+                digit_widget.set_error(True)
             if self._dot_label is not None:
                 self._dot_label.setVisible(False)
-        elif self._value.is_overload() and len(self._digits) == 1:
-            self._digits[-1].set_value("O")
-            for digit_widget in self._digits[:-1]:
-                digit_widget.setVisible(False)
-            if self._dot_label is not None:
-                self._dot_label.setVisible(False)
-        else:
-            for i, digit_widget in enumerate(reversed(self._digits)):
+
+        elif self._value.is_overload():
+            self._update_digits()
+            for digit_widget in self._digits:
+                digit_widget.set_error(True)
+
+        elif self._value.is_invalid():
+            for digit_widget in self._digits:
+                digit_widget.set_error(False)
+                digit_widget.set_value("-")
                 digit_widget.setVisible(True)
-                if self._dot_label is not None:
-                    self._dot_label.setVisible(True)
-                if self._value.is_ok():
-                    rounded = round(self._value.get(), self._digit_count)
-                    digit_value = int(round(abs(rounded) / self._calculate_multiplier(i), self._digit_count)) % 10
-                    digit_widget.set_value(str(digit_value))
+            if self._dot_label is not None:
+                self._dot_label.setVisible(False)
 
-                elif self._value.is_invalid():
-                    digit_widget.set_value("-")
-
-                else:
-                    raise RuntimeError(f"Unknown value condition: {self._value.condition}")
+        elif self._value.is_ok():
+            self._update_digits()
+            if self._dot_label is not None:
+                self._dot_label.setVisible(True)
+            for digit_widget in self._digits:
+                digit_widget.set_error(False)
+                digit_widget.setVisible(True)
 
         self._sign_label.setVisible(self.calculate_sign_visibility())
 
+    def _update_digits(self) -> None:
+        for i, digit_widget in enumerate(reversed(self._digits)):
+            if self._value.is_ok() or self._value.is_overload():
+                rounded = round(self._value.get(), self._digit_count)
+                digit_value = int(round(abs(rounded) / self._calculate_multiplier(i), self._digit_count)) % 10
+                digit_widget.set_value(str(digit_value))
+
     def calculate_sign_visibility(self) -> bool:
         if self._invert_controls:
-            if self._value.is_invalid() or self._value.is_overload():
+            if self._value.is_invalid():
                 return True
             else:
                 return self._value.get() <= 0
         else:
-            if self._value.is_invalid() or self._value.is_overload():
+            if self._value.is_invalid():
                 return False
             else:
                 return self._value.get() < 0
