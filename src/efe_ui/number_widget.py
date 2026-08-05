@@ -5,7 +5,7 @@ from functools import partial
 from typing import Self
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFocusEvent, QKeyEvent
+from PySide6.QtGui import QColor, QFocusEvent, QKeyEvent
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -133,7 +133,7 @@ class NumberWidget(QWidget):
     def _setup_ui(self) -> None:
         self.hlayout = QHBoxLayout(self)
         self.setLayout(self.hlayout)
-        self.hlayout.setContentsMargins(0, 0, 0, 0)
+        self.hlayout.setContentsMargins(3, 0, 3, 0)
         self.hlayout.setSpacing(1)
         self.hlayout.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
 
@@ -141,6 +141,18 @@ class NumberWidget(QWidget):
         self.hlayout.addWidget(self._sign_label, alignment=Qt.AlignmentFlag.AlignCenter)
         self._dot_label: QLabel | None = None
         self._setup_number()
+
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setAutoFillBackground(True)
+
+    def set_background_color(self, color: QColor) -> None:
+        rgba = f"rgba({color.red()}, {color.green()}, {color.blue()}, {color.alpha()})"
+        self.setStyleSheet(f"""
+            NumberWidget {{
+                background-color: {rgba};
+                border-radius: 5px;
+            }}
+        """)
 
     def _setup_number(self) -> None:
         # Clear previous widgets

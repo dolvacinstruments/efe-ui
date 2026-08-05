@@ -25,7 +25,6 @@ class DeviceWidget(QWidget):
         self._setup_device()
         self._setup_ui()
         self._connect_signals()
-        print(Value(0))
 
     def _setup_device(self) -> None:
         self._device = EFE(self._ip)
@@ -109,14 +108,11 @@ class DeviceWidget(QWidget):
     def handle_measured_update(self, measured: DeviceMeasured) -> None:
         for i in range(CHANNEL_COUNT):
             channel_widget = self._channel_widgets[i]
-            if not channel_widget.is_disabled():
-                channel_widget.set_measure_value(VariableType.VOLTAGE_C, measured.voltage_c[i])
-                channel_widget.set_measure_value(VariableType.CURRENT_C, measured.current[i])
-                channel_widget.set_measure_value(VariableType.VOLTAGE_E, measured.voltage_e[i])
-            else:
-                channel_widget.set_measure_value(VariableType.VOLTAGE_C, Value.invalid())
-                channel_widget.set_measure_value(VariableType.CURRENT_C, Value.invalid())
-                channel_widget.set_measure_value(VariableType.VOLTAGE_E, Value.invalid())
+            channel_widget.set_measure_value(VariableType.VOLTAGE_C, Value.invalid())
+            channel_widget.set_measure_value(VariableType.CURRENT_C, Value.invalid())
+            channel_widget.set_measure_value(VariableType.VOLTAGE_E, Value.invalid())
+            channel_widget.set_cathode_state(measured.state_c[i])
+            channel_widget.set_extraction_state(measured.state_e[i])
 
     @Slot()
     def handle_force_disable(self) -> None:

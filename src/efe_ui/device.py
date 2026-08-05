@@ -71,16 +71,36 @@ class DeviceSetup:
         return setup
 
 
+class CathodeState(StrEnum):
+    CV = "CV"
+    CC = "CC"
+    OFF = "OFF"
+    UNSTABLE = "Unstable"
+
+
+class ExtractionState(StrEnum):
+    CV = "CV"
+    CC = "CC"
+    EKV = "EKV"
+    OFF = "OFF"
+    UNSTABLE = "Unstable"
+
+
 @dataclass
 class DeviceMeasured:
     voltage_c: list[Value]
     voltage_e: list[Value]
     current: list[Value]
 
+    state_c: list[CathodeState]
+    state_e: list[ExtractionState]
+
     def __init__(self) -> None:
         self.voltage_c = [Value.invalid()] * CHANNEL_COUNT
         self.voltage_e = [Value.invalid()] * CHANNEL_COUNT
         self.current = [Value.invalid()] * CHANNEL_COUNT
+        self.state_c = [CathodeState.UNSTABLE] * CHANNEL_COUNT
+        self.state_e = [ExtractionState.UNSTABLE] * CHANNEL_COUNT
 
 
 class TickWorker(QObject):
@@ -179,14 +199,17 @@ class EFE(QObject):
             measured = DeviceMeasured()
             response = self._device.query("MEAS:ALL?")
             raw_values = response.split(",")
-            if len(raw_values) != CHANNEL_COUNT * 3:
+            if len(raw_values) != CHANNEL_COUNT * 3:  # Change to 5
                 raise RuntimeError(f"Unexpected number of values in response: {len(raw_values)}")
-            values = [float(v) for v in raw_values]
 
             for i in range(CHANNEL_COUNT):
-                measured.current[i] = Value(values.pop(0) * 1e6)  # microamps
-                measured.voltage_c[i] = Value(values.pop(0))
-                measured.voltage_e[i] = Value(values.pop(0))
+                measured.current[i] = Value(float(raw_values.pop(0)) * 1e6)  # microamps
+                measured.voltage_c[i] = Value(float(raw_values.pop(0)))
+                measured.voltage_e[i] = Value(float(raw_values.pop(0)))
+                # measured.state_c[i] = CathodeState(raw_values.pop(0))
+                # measured.state_e[i] = ExtractionState(raw_values.pop(0))
+                measured.state_c[i] = CathodeState.CV  # Placeholder
+                measured.state_e[i] = ExtractionState.CV  # Placeholder
 
             self.measured_updated.emit(measured)
         except DeviceIOError as e:
