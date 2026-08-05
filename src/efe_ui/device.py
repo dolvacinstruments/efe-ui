@@ -41,7 +41,6 @@ class DeviceStatus:
 @dataclass
 class DeviceSetup:
     is_disabled: list[bool | None]
-    is_diode_mode: list[bool | None]
     is_high_range: list[bool | None]
 
     voltage_c: list[float | None]
@@ -51,7 +50,6 @@ class DeviceSetup:
 
     def __init__(self) -> None:
         self.is_disabled = [None] * CHANNEL_COUNT
-        self.is_diode_mode = [None] * CHANNEL_COUNT
         self.is_high_range = [None] * CHANNEL_COUNT
 
         self.voltage_c = [None] * CHANNEL_COUNT
@@ -63,7 +61,6 @@ class DeviceSetup:
     def zeroed(cls) -> Self:
         setup = cls()
         setup.is_disabled = [True] * CHANNEL_COUNT
-        setup.is_diode_mode = [True] * CHANNEL_COUNT
         setup.is_high_range = [True] * CHANNEL_COUNT
 
         setup.voltage_c = [0.0] * CHANNEL_COUNT
@@ -153,10 +150,6 @@ class EFE(QObject):
         self._pending_setup.is_disabled[channel] = is_disabled
 
     @Slot(int, bool)
-    def set_diode_mode(self, channel: int, is_diode_mode: bool) -> None:
-        self._pending_setup.is_diode_mode[channel] = is_diode_mode
-
-    @Slot(int, bool)
     def set_high_range(self, channel: int, is_high_range: bool) -> None:
         self._pending_setup.is_high_range[channel] = is_high_range
 
@@ -213,13 +206,6 @@ class EFE(QObject):
                         self._device.write(f"OUTP{i + 1} ON")
                     self._setup.is_disabled[i] = self._pending_setup.is_disabled[i]
 
-                if self._setup.is_diode_mode[i] != self._pending_setup.is_diode_mode[i]:
-                    if self._pending_setup.is_diode_mode[i]:
-                        self._device.write(f"MODE{i + 1}:DIODE")
-                    else:
-                        self._device.write(f"MODE{i + 1}:NORMAL")
-                    self._setup.is_diode_mode[i] = self._pending_setup.is_diode_mode[i]
-
                 if self._setup.is_high_range[i] != self._pending_setup.is_high_range[i]:
                     if self._pending_setup.is_high_range[i]:
                         self._device.write(f"SOUR{i + 1}:CURR:RANG 1e-4")
@@ -235,14 +221,13 @@ class EFE(QObject):
                     self._device.write(f"SOUR{i + 1}:CURRC {self._pending_setup.current_c[i]}")
                     self._setup.current_c[i] = self._pending_setup.current_c[i]
 
-                if not self._setup.is_diode_mode[i]:
-                    if self._setup.voltage_e[i] != self._pending_setup.voltage_e[i]:
-                        self._device.write(f"SOUR{i + 1}:VOLTE {self._pending_setup.voltage_e[i]}")
-                        self._setup.voltage_e[i] = self._pending_setup.voltage_e[i]
+                if self._setup.voltage_e[i] != self._pending_setup.voltage_e[i]:
+                    self._device.write(f"SOUR{i + 1}:VOLTE {self._pending_setup.voltage_e[i]}")
+                    self._setup.voltage_e[i] = self._pending_setup.voltage_e[i]
 
-                    if self._setup.current_e[i] != self._pending_setup.current_e[i]:
-                        self._device.write(f"SOUR{i + 1}:CURRE {self._pending_setup.current_e[i]}")
-                        self._setup.current_e[i] = self._pending_setup.current_e[i]
+                if self._setup.current_e[i] != self._pending_setup.current_e[i]:
+                    self._device.write(f"SOUR{i + 1}:CURRE {self._pending_setup.current_e[i]}")
+                    self._setup.current_e[i] = self._pending_setup.current_e[i]
 
         except DeviceIOError as e:
             logger.error(f"Error occurred while updating device: {e}")

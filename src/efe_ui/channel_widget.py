@@ -41,7 +41,6 @@ class ChannelWidget(QWidget):
     ) -> None:
         super().__init__(parent)
 
-        self._is_diode_mode = True
         self._is_high_range = True
         self._is_disabled = True
         self._is_write_only = write_only
@@ -92,9 +91,6 @@ class ChannelWidget(QWidget):
         self.range_switch = TitleBarSwitch("Range:", "H 🟧", "L 🟦")
         title_layout.addWidget(self.range_switch)
 
-        self.mode_switch = TitleBarSwitch("Mode:", "D 🟪", "T 🟨")
-        title_layout.addWidget(self.mode_switch)
-
     def _add_numbers(self, layout: QVBoxLayout) -> None:
         self.grid = QGridLayout()
         layout.addLayout(self.grid)
@@ -123,9 +119,6 @@ class ChannelWidget(QWidget):
         self.ie_measure_widget, self.ie_set_widget = self._add_row(
             self.grid, 4, self._modify_row_config(IE_HIGH_ROW, self._is_write_only)
         )
-
-        self.set_row_hide(3, True, False)
-        self.set_row_hide(4, True, False)
 
     def _modify_row_config(self, config: RowConfig, write_only: bool) -> RowConfig:
         if write_only:
@@ -184,7 +177,6 @@ class ChannelWidget(QWidget):
     def _connect_signals(self) -> None:
         self.enable_switch.state_changed.connect(self._change_is_disabled)
         self.range_switch.state_changed.connect(self._change_is_high_range)
-        self.mode_switch.state_changed.connect(self._change_is_diode_mode)
 
         self.vc_set_widget.number_changed.connect(partial(self.value_changed.emit, VariableType.VOLTAGE_C))
         self.ic_set_widget.number_changed.connect(partial(self.value_changed.emit, VariableType.CURRENT_C))
@@ -224,23 +216,6 @@ class ChannelWidget(QWidget):
             self.ie_set_widget.set_min_max(IE_LOW_ROW.minimum, IE_LOW_ROW.maximum)
         self.is_high_range_changed.emit(state)
 
-    def _change_is_diode_mode(self, state: bool) -> None:
-        self._is_diode_mode = state
-        self.set_row_hide(3, self._is_diode_mode, self._is_write_only)
-        self.set_row_hide(4, self._is_diode_mode, True)
-
-        self.is_diode_mode_changed.emit(self._is_diode_mode)
-
-    def set_row_hide(self, row: int, hide: bool, skip_measure_row: bool = False) -> None:
-        for col in range(4):
-            if skip_measure_row and col == 1:
-                continue
-            item = self.grid.itemAtPosition(row, col)
-            if item is not None:
-                widget = item.widget()
-                if widget is not None:
-                    widget.setVisible(not hide)
-
     def set_measure_value(self, variable_type: VariableType, value: Value) -> None:
         if variable_type == VariableType.VOLTAGE_C:
             self.vc_measure_widget.set_value(value)
@@ -262,9 +237,6 @@ class ChannelWidget(QWidget):
 
     def set_is_disabled(self, is_disabled: bool) -> None:
         self.enable_switch.set_state(is_disabled)
-
-    def set_is_diode_mode(self, is_diode_mode: bool) -> None:
-        self.mode_switch.set_state(is_diode_mode)
 
     def set_is_high_range(self, is_high_range: bool) -> None:
         self.range_switch.set_state(is_high_range)
