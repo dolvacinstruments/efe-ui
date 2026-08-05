@@ -108,9 +108,9 @@ class DeviceWidget(QWidget):
     def handle_measured_update(self, measured: DeviceMeasured) -> None:
         for i in range(CHANNEL_COUNT):
             channel_widget = self._channel_widgets[i]
-            channel_widget.set_measure_value(VariableType.VOLTAGE_C, Value.invalid())
-            channel_widget.set_measure_value(VariableType.CURRENT_C, Value.invalid())
-            channel_widget.set_measure_value(VariableType.VOLTAGE_E, Value.invalid())
+            channel_widget.set_measure_value(VariableType.VOLTAGE_C, measured.voltage_c[i])
+            channel_widget.set_measure_value(VariableType.CURRENT_C, measured.current[i])
+            channel_widget.set_measure_value(VariableType.VOLTAGE_E, measured.voltage_e[i])
             channel_widget.set_cathode_state(measured.state_c[i])
             channel_widget.set_extraction_state(measured.state_e[i])
 
