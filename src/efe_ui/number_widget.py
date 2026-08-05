@@ -86,12 +86,17 @@ class NumberWidget(QWidget):
         self._value = Value(0)
         self.set_value(value)
 
-    def set_value(self, value: Value) -> None:
+    def set_value(self, value: Value | float | int) -> None:
         old_value = self._value
-        if value.is_ok() and (value.get() < self._min_value or value.get() > self._max_value):
-            self._value = Value(value.get(), ValueCondition.OVERLOAD)
-        else:
+
+        if isinstance(value, float | int):
+            self._value = Value(value, self._value.condition)
+        elif isinstance(value, Value):
             self._value = value
+
+        if self._editable:
+            self._value = self.clamp_value(self._value)
+
         self._update_value_display()
         if self._value != old_value:
             self.number_changed.emit(self._value)
@@ -107,7 +112,7 @@ class NumberWidget(QWidget):
         self._point_position = point_position
         self._setup_number()
         self.set_min_max(self._min_value, self._max_value)
-        self._update_value_display()
+        self.set_value(self._value)
 
     def set_digit_count(self, digit_count: int) -> None:
         if self._selected_digit is not None:
@@ -115,7 +120,7 @@ class NumberWidget(QWidget):
         self._digit_count = digit_count
         self._setup_number()
         self.set_min_max(self._min_value, self._max_value)
-        self._update_value_display()
+        self.set_value(self._value)
 
     def get_value(self) -> Value:
         return self._value
@@ -255,22 +260,18 @@ class NumberWidget(QWidget):
             m = 10**self._digit_count - 1
         return max(min(value, m), -m)
 
-    def clamp_value(self, value: float) -> float:
-        return max(min(value, self._max_value), self._min_value)
+    def clamp_value(self, value: Value) -> Value:
+        return Value(max(min(value.get(), self._max_value), self._min_value), value.condition)
 
     def handle_increment(self, digit_index: int) -> None:
         mult = self._calculate_multiplier(digit_index)
-        value = Value(
-            self.clamp_value((self._value.get() + mult) if not self._invert_controls else self._value.get() - mult)
-        )
-        self.set_value(value)
+        new_value = self._value.get() + mult if not self._invert_controls else self._value.get() - mult
+        self.set_value(new_value)
 
     def handle_decrement(self, digit_index: int) -> None:
         mult = self._calculate_multiplier(digit_index)
-        value = Value(
-            self.clamp_value((self._value.get() - mult) if not self._invert_controls else self._value.get() + mult)
-        )
-        self.set_value(value)
+        new_value = self._value.get() - mult if not self._invert_controls else self._value.get() + mult
+        self.set_value(new_value)
 
     def handle_clicked(self, digit_index: int) -> None:
         self.select_digit(digit_index)
@@ -330,8 +331,12 @@ class NumberWidget(QWidget):
                 else:
                     new_value = -new_mag if self._invert_controls else new_mag
 
-                new_value = self.clamp_value(new_value)
-                self.set_value(Value(new_value))
+                if self._selected_digit > 0:
+                    self.select_digit(self._selected_digit - 1)
+                else:
+                    self.focusNextChild()
+
+                self.set_value(new_value)
 
             elif event.key() == Qt.Key.Key_Escape:
                 self.select_digit(None)
