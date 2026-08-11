@@ -75,15 +75,17 @@ class CathodeState(StrEnum):
     CV = "CV"
     CC = "CC"
     OFF = "OFF"
-    UNSTABLE = "Unstable"
+    UNSTABLE = "UNSTABLE"
+    ERROR = "ERROR"
 
 
 class ExtractionState(StrEnum):
     CV = "CV"
     CC = "CC"
-    EKV = "EKV"
+    EKV = "KCV"
     OFF = "OFF"
-    UNSTABLE = "Unstable"
+    UNSTABLE = "UNSTABLE"
+    ERROR = "ERROR"
 
 
 @dataclass
@@ -199,17 +201,22 @@ class EFE(QObject):
             measured = DeviceMeasured()
             response = self._device.query("MEAS:ALL?")
             raw_values = response.split(",")
-            if len(raw_values) != CHANNEL_COUNT * 3:  # Change to 5
+            if len(raw_values) == CHANNEL_COUNT * 3:
+                for i in range(CHANNEL_COUNT):
+                    measured.current[i] = Value(float(raw_values.pop(0)) * 1e6)  # microamps
+                    measured.voltage_c[i] = Value(float(raw_values.pop(0)))
+                    measured.voltage_e[i] = Value(float(raw_values.pop(0)))
+                    measured.state_c[i] = CathodeState.UNSTABLE  # Placeholder
+                    measured.state_e[i] = ExtractionState.UNSTABLE  # Placeholder
+            elif len(raw_values) == CHANNEL_COUNT * 5:
+                for i in range(CHANNEL_COUNT):
+                    measured.current[i] = Value(float(raw_values.pop(0)) * 1e6)  # microamps
+                    measured.voltage_c[i] = Value(float(raw_values.pop(0)))
+                    measured.voltage_e[i] = Value(float(raw_values.pop(0)))
+                    measured.state_c[i] = CathodeState(raw_values.pop(0).strip())
+                    measured.state_e[i] = ExtractionState(raw_values.pop(0).strip())
+            else:
                 raise RuntimeError(f"Unexpected number of values in response: {len(raw_values)}")
-
-            for i in range(CHANNEL_COUNT):
-                measured.current[i] = Value(float(raw_values.pop(0)) * 1e6)  # microamps
-                measured.voltage_c[i] = Value(float(raw_values.pop(0)))
-                measured.voltage_e[i] = Value(float(raw_values.pop(0)))
-                # measured.state_c[i] = CathodeState(raw_values.pop(0))
-                # measured.state_e[i] = ExtractionState(raw_values.pop(0))
-                measured.state_c[i] = CathodeState.CV  # Placeholder
-                measured.state_e[i] = ExtractionState.CV  # Placeholder
 
             self.measured_updated.emit(measured)
         except DeviceIOError as e:
