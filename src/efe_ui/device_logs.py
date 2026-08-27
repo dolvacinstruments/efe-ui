@@ -37,7 +37,7 @@ class DeviceLogs(QObject):
 
                 device_id, timestamp_raw, level_raw = struct.unpack(HEADER_FORMAT, data[:HEADER_SIZE])
 
-                timestamp = timestamp_raw / 1_000_000
+                timestamp = timestamp_raw / 10_000_000
                 level_str = LOG_LEVEL_MAP.get(level_raw, f"UNKNOWN({level_raw})")
 
                 content_raw = data[HEADER_SIZE:]
