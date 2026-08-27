@@ -30,15 +30,15 @@ steps:
     - 'echo "Deploying package: $${PKG_NAME}"'
 
     # 4. Download the specific package manifest
-    - curl -s -f "https://packages.dolvac.com/$${PKG_NAME}.json" -o manifest.json || echo "" > manifest.json
+    - curl -s -f "https://packages.dolvac.com/$${PKG_NAME}.json" -o manifest.json || touch manifest.json
 
     # 5. Update the manifest with the new version
     - |
       python3 -c "
       import glob, json, hashlib, pathlib
       manifest = pathlib.Path('manifest.json')
-      lines = set(manifest.read_text().splitlines()) if manifest.exists() else set()
-      
+      lines = {line.strip() for line in manifest.read_text().splitlines() if line.strip()} if manifest.exists() else set() 
+
       for filepath in glob.glob('dist/*'):
           p = pathlib.Path(filepath)
           entry = {
