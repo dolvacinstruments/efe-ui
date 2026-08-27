@@ -27,10 +27,10 @@ steps:
 
     # 3. Extract and normalize PEP 503 package name from the built wheel
     - export PKG_NAME=$(python3 -c "import glob, pathlib; print(pathlib.Path(glob.glob('dist/*.whl')[0]).name.split('-')[0].lower().replace('_', '-'))")
-    - 'echo "Deploying package: ${PKG_NAME}"'
+    - 'echo "Deploying package: $${PKG_NAME}"'
 
     # 4. Download the specific package manifest
-    - curl -s -f "https://packages.dolvac.com/${PKG_NAME}.json" -o manifest.json || echo "" > manifest.json
+    - curl -s -f "https://packages.dolvac.com/$${PKG_NAME}.json" -o manifest.json || echo "" > manifest.json
 
     # 5. Update the manifest with the new version
     - |
@@ -55,7 +55,7 @@ steps:
     - |
       uvx dumb-pypi \
         --package-list-json manifest.json \
-        --packages-url https://packages.dolvac.com/${PKG_NAME}/ \
+        --packages-url https://packages.dolvac.com/$${PKG_NAME}/ \
         --output-dir static-index
 
     # 7. Upload the package
@@ -63,7 +63,7 @@ steps:
     - echo "ftp.cluster100.hosting.ovh.net ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDzgDZB8iYU8CvRn8DkDn4GGZoYN6Kw+Go7O16vL2aeF" >> ~/.ssh/known_hosts 
     - |
       lftp $SFTP_PATH -e '
-        mirror -R --verbose dist/ packages/${PKG_NAME}/;
-        put manifest.json -o packages/${PKG_NAME}.json;
-        put static-index/${PKG_NAME}/index.html -o packages/${PKG_NAME}/index.html;
+        mirror -R --verbose dist/ packages/$${PKG_NAME}/;
+        put manifest.json -o packages/$${PKG_NAME}.json;
+        put static-index/$${PKG_NAME}/index.html -o packages/$${PKG_NAME}/index.html;
         exit'
