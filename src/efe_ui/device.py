@@ -370,7 +370,7 @@ class RealDevice(Device):
             cmd_bytes = (command + "\n").encode("ascii")
             logger.info(f"Sending: {command}")
             self._send(cmd_bytes)
-        except DeviceDisconnectedError, DeviceIOError:
+        except (DeviceDisconnectedError, DeviceIOError):
             raise
         except Exception as e:
             raise DeviceIOError(f"Unexpected error while writing: {e}") from e
@@ -385,7 +385,7 @@ class RealDevice(Device):
             ret = response.decode("ascii").rstrip("\n")
             logger.info(f"Received: {ret}")
             return ret
-        except DeviceDisconnectedError, DeviceIOError:
+        except (DeviceDisconnectedError, DeviceIOError):
             raise
         except Exception as e:
             raise DeviceIOError(f"Unexpected error during query: {e}") from e

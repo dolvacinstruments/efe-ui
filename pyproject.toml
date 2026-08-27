@@ -1,32 +1,33 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
 [project]
 name = "efe-ui"
-version = "0.1.0"
-description = "Add your description here"
+dynamic = ["version"]
+description = "Graphical User Interface for controlling EFE1201 boards"
 readme = "README.md"
 authors = [
-    { name = "Jakub Jendryka", email = "jendryka.j@gmail.com" }
+    { name = "Dolvac Instruments", email = "contact@dolvac.com" }
 ]
-requires-python = ">=3.14"
+requires-python = ">=3.11"
 dependencies = [
     "platformdirs>=4.10.1",
     "pydantic>=2.13.4",
     "pyside6>=6.8",
-    "pyvisa>=1.14",
-    "pyvisa-py>=0.7",
 ]
 
 [project.scripts]
 efe-ui = "efe_ui.main:main"
-
-[build-system]
-requires = ["uv_build>=0.11.16,<0.12.0"]
-build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
     "ruff>=0.15.16",
     "ty>=0.0.46",
 ]
+
+[tool.hatch.version]
+source = "vcs"
 
 [tool.ruff]
 line-length = 120
