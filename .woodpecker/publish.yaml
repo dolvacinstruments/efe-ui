@@ -13,7 +13,7 @@ depends_on:
 
 steps:
 - name: Build and Publish
-  image: ghcr.io/astral-sh/uv:debian-slim
+  image: ghcr.io/astral-sh/uv:debian
   environment:
     SFTP_PATH:
       from_secret: SFTP_PATH
