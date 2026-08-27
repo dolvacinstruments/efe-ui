@@ -58,6 +58,9 @@ steps:
         --packages-url https://packages.dolvac.com/$${PKG_NAME}/ \
         --output-dir static-index
 
+    - cat manifest.json
+    - find static-index -type f
+
     # 7. Upload the package
     - mkdir -p ~/.ssh
     - echo "ftp.cluster100.hosting.ovh.net ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDzgDZB8iYU8CvRn8DkDn4GGZoYN6Kw+Go7O16vL2aeF" >> ~/.ssh/known_hosts 
