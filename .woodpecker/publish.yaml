@@ -22,14 +22,17 @@ steps:
     - apt update
     - apt install -y lftp git
 
-    # 2. Extract and normalize PEP 503 package name from the built wheel
+    # 2. Build the package
+    - uv build
+
+    # 3. Extract and normalize PEP 503 package name from the built wheel
     - export PKG_NAME=$(python3 -c "import glob, pathlib; print(pathlib.Path(glob.glob('dist/*.whl')[0]).name.split('-')[0].lower().replace('_', '-'))")
     - 'echo "Deploying package: ${PKG_NAME}"'
 
-    # 3. Download the specific package manifest
+    # 4. Download the specific package manifest
     - curl -s -f "https://packages.dolvac.com/${PKG_NAME}.json" -o manifest.json || echo "" > manifest.json
 
-    # 4. Update the manifest with the new version
+    # 5. Update the manifest with the new version
     - |
       python3 -c "
       import glob, json, hashlib, pathlib
@@ -48,14 +51,14 @@ steps:
       manifest.write_text('\n'.join(sorted(lines)) + '\n')
       "
 
-    # 5. Generate index HTML for THIS package
+    # 6. Generate index HTML for THIS package
     - |
       uvx dumb-pypi \
         --package-list-json manifest.json \
         --packages-url https://packages.dolvac.com/${PKG_NAME}/ \
         --output-dir static-index
 
-    # 6. Upload the package
+    # 7. Upload the package
     - mkdir -p ~/.ssh
     - echo "ftp.cluster100.hosting.ovh.net ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDzgDZB8iYU8CvRn8DkDn4GGZoYN6Kw+Go7O16vL2aeF" >> ~/.ssh/known_hosts 
     - |
