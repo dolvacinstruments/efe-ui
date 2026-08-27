@@ -2,6 +2,7 @@ import copy
 from functools import partial
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
@@ -22,9 +23,14 @@ from efe_ui.constants import (
     RowConfig,
     VariableType,
 )
+from efe_ui.device import CathodeState, ExtractionState
 from efe_ui.number_widget import NumberWidget, Value
 from efe_ui.title_bar_switch import TitleBarSwitch
 from efe_ui.ui_helpers import create_title_bar_label
+
+GREEN = QColor(0, 255, 0, 20)
+RED = QColor(255, 0, 0, 40)
+TRANSPARENT = QColor(0, 0, 0, 0)
 
 
 class ChannelWidget(QWidget):
@@ -41,7 +47,6 @@ class ChannelWidget(QWidget):
     ) -> None:
         super().__init__(parent)
 
-        self._is_diode_mode = True
         self._is_high_range = True
         self._is_disabled = True
         self._is_write_only = write_only
@@ -92,9 +97,6 @@ class ChannelWidget(QWidget):
         self.range_switch = TitleBarSwitch("Range:", "H 🟧", "L 🟦")
         title_layout.addWidget(self.range_switch)
 
-        self.mode_switch = TitleBarSwitch("Mode:", "D 🟪", "T 🟨")
-        title_layout.addWidget(self.mode_switch)
-
     def _add_numbers(self, layout: QVBoxLayout) -> None:
         self.grid = QGridLayout()
         layout.addLayout(self.grid)
@@ -102,7 +104,7 @@ class ChannelWidget(QWidget):
         self.grid.setSizeConstraint(QGridLayout.SizeConstraint.SetFixedSize)
         self.grid.setContentsMargins(10, 0, 10, 10)
         self.grid.setHorizontalSpacing(10)
-        self.grid.setVerticalSpacing(0)
+        self.grid.setVerticalSpacing(5)
 
         if not self._is_write_only:
             measure_label = QLabel("Measure:", self)
@@ -111,21 +113,18 @@ class ChannelWidget(QWidget):
         set_label = QLabel("Set:", self)
         self.grid.addWidget(set_label, 0, 2, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        self.vc_measure_widget, self.vc_set_widget = self._add_row(
+        self.vc_label, self.vc_measure_widget, self.vc_set_widget = self._add_row(
             self.grid, 1, self._modify_row_config(VC_ROW, self._is_write_only)
         )
-        self.ic_measure_widget, self.ic_set_widget = self._add_row(
+        self.ic_label, self.ic_measure_widget, self.ic_set_widget = self._add_row(
             self.grid, 2, self._modify_row_config(IC_HIGH_ROW, self._is_write_only)
         )
-        self.ve_measure_widget, self.ve_set_widget = self._add_row(
+        self.ve_label, self.ve_measure_widget, self.ve_set_widget = self._add_row(
             self.grid, 3, self._modify_row_config(VE_ROW, self._is_write_only)
         )
-        self.ie_measure_widget, self.ie_set_widget = self._add_row(
+        self.ie_label, self.ie_measure_widget, self.ie_set_widget = self._add_row(
             self.grid, 4, self._modify_row_config(IE_HIGH_ROW, self._is_write_only)
         )
-
-        self.set_row_hide(3, True, False)
-        self.set_row_hide(4, True, False)
 
     def _modify_row_config(self, config: RowConfig, write_only: bool) -> RowConfig:
         if write_only:
@@ -134,7 +133,7 @@ class ChannelWidget(QWidget):
             return modified_config
         return config
 
-    def _add_row(self, grid: QGridLayout, row: int, config: RowConfig) -> tuple[NumberWidget, NumberWidget]:
+    def _add_row(self, grid: QGridLayout, row: int, config: RowConfig) -> tuple[QLabel, NumberWidget, NumberWidget]:
         label = QLabel(config.label, self)
         font = label.font()
         font.setPointSize(DIGIT_FONT_SIZE)
@@ -179,12 +178,11 @@ class ChannelWidget(QWidget):
         unit_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         grid.addWidget(unit_label, row, 3, alignment=Qt.AlignmentFlag.AlignLeft)
 
-        return measure_widget, set_widget
+        return label, measure_widget, set_widget
 
     def _connect_signals(self) -> None:
         self.enable_switch.state_changed.connect(self._change_is_disabled)
         self.range_switch.state_changed.connect(self._change_is_high_range)
-        self.mode_switch.state_changed.connect(self._change_is_diode_mode)
 
         self.vc_set_widget.number_changed.connect(partial(self.value_changed.emit, VariableType.VOLTAGE_C))
         self.ic_set_widget.number_changed.connect(partial(self.value_changed.emit, VariableType.CURRENT_C))
@@ -224,23 +222,6 @@ class ChannelWidget(QWidget):
             self.ie_set_widget.set_min_max(IE_LOW_ROW.minimum, IE_LOW_ROW.maximum)
         self.is_high_range_changed.emit(state)
 
-    def _change_is_diode_mode(self, state: bool) -> None:
-        self._is_diode_mode = state
-        self.set_row_hide(3, self._is_diode_mode, self._is_write_only)
-        self.set_row_hide(4, self._is_diode_mode, True)
-
-        self.is_diode_mode_changed.emit(self._is_diode_mode)
-
-    def set_row_hide(self, row: int, hide: bool, skip_measure_row: bool = False) -> None:
-        for col in range(4):
-            if skip_measure_row and col == 1:
-                continue
-            item = self.grid.itemAtPosition(row, col)
-            if item is not None:
-                widget = item.widget()
-                if widget is not None:
-                    widget.setVisible(not hide)
-
     def set_measure_value(self, variable_type: VariableType, value: Value) -> None:
         if variable_type == VariableType.VOLTAGE_C:
             self.vc_measure_widget.set_value(value)
@@ -249,9 +230,36 @@ class ChannelWidget(QWidget):
         elif variable_type == VariableType.VOLTAGE_E:
             self.ve_measure_widget.set_value(value)
 
+    def set_cathode_state(self, state: CathodeState) -> None:
+        if state == CathodeState.CV:
+            self.vc_set_widget.set_background_color(GREEN)
+            self.ic_set_widget.set_background_color(TRANSPARENT)
+        elif state == CathodeState.CC:
+            self.vc_set_widget.set_background_color(TRANSPARENT)
+            self.ic_set_widget.set_background_color(GREEN)
+        elif state == CathodeState.UNSTABLE:
+            self.vc_set_widget.set_background_color(RED)
+            self.ic_set_widget.set_background_color(RED)
+        elif state == CathodeState.OFF or state == CathodeState.ERROR:
+            self.vc_set_widget.set_background_color(TRANSPARENT)
+            self.ic_set_widget.set_background_color(TRANSPARENT)
+
+    def set_extraction_state(self, state: ExtractionState) -> None:
+        if state == ExtractionState.CV:
+            self.ve_set_widget.set_background_color(GREEN)
+            self.ie_set_widget.set_background_color(TRANSPARENT)
+        elif state == ExtractionState.CC:
+            self.ve_set_widget.set_background_color(TRANSPARENT)
+            self.ie_set_widget.set_background_color(GREEN)
+        elif state == ExtractionState.EKV or state == ExtractionState.OFF:
+            self.ve_set_widget.set_background_color(TRANSPARENT)
+            self.ie_set_widget.set_background_color(TRANSPARENT)
+        elif state == ExtractionState.UNSTABLE or state == ExtractionState.ERROR:
+            self.ve_set_widget.set_background_color(RED)
+            self.ie_set_widget.set_background_color(RED)
+
     def set_set_value(self, variable_type: VariableType, value: Value) -> None:
         if variable_type == VariableType.VOLTAGE_C:
-            print(f"Setting VC value to {value}")
             self.vc_set_widget.set_value(value)
         elif variable_type == VariableType.CURRENT_C:
             self.ic_set_widget.set_value(value)
@@ -262,9 +270,6 @@ class ChannelWidget(QWidget):
 
     def set_is_disabled(self, is_disabled: bool) -> None:
         self.enable_switch.set_state(is_disabled)
-
-    def set_is_diode_mode(self, is_diode_mode: bool) -> None:
-        self.mode_switch.set_state(is_diode_mode)
 
     def set_is_high_range(self, is_high_range: bool) -> None:
         self.range_switch.set_state(is_high_range)

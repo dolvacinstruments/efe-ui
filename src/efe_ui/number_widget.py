@@ -5,7 +5,7 @@ from functools import partial
 from typing import Self
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFocusEvent, QKeyEvent
+from PySide6.QtGui import QColor, QFocusEvent, QKeyEvent
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -34,11 +34,6 @@ class Value:
             object.__setattr__(self, "condition", ValueCondition.INVALID)
         elif self.number >= 9.9e37 or self.number <= -9.9e37:
             object.__setattr__(self, "condition", ValueCondition.OVERLOAD)
-
-        if self.condition == ValueCondition.OVERLOAD:
-            object.__setattr__(self, "number", float("inf") if self.number > 0 else float("-inf"))
-        elif self.condition == ValueCondition.INVALID:
-            object.__setattr__(self, "number", float("nan"))
 
     @classmethod
     def invalid(cls) -> Self:
@@ -91,12 +86,17 @@ class NumberWidget(QWidget):
         self._value = Value(0)
         self.set_value(value)
 
-    def set_value(self, value: Value) -> None:
+    def set_value(self, value: Value | float | int) -> None:
         old_value = self._value
-        if value.is_ok() and (value.get() < self._min_value or value.get() > self._max_value):
-            self._value = Value(value.get(), ValueCondition.OVERLOAD)
-        else:
+
+        if isinstance(value, float | int):
+            self._value = Value(value, self._value.condition)
+        elif isinstance(value, Value):
             self._value = value
+
+        if self._editable:
+            self._value = self.clamp_value(self._value)
+
         self._update_value_display()
         if self._value != old_value:
             self.number_changed.emit(self._value)
@@ -112,7 +112,7 @@ class NumberWidget(QWidget):
         self._point_position = point_position
         self._setup_number()
         self.set_min_max(self._min_value, self._max_value)
-        self._update_value_display()
+        self.set_value(self._value)
 
     def set_digit_count(self, digit_count: int) -> None:
         if self._selected_digit is not None:
@@ -120,7 +120,7 @@ class NumberWidget(QWidget):
         self._digit_count = digit_count
         self._setup_number()
         self.set_min_max(self._min_value, self._max_value)
-        self._update_value_display()
+        self.set_value(self._value)
 
     def get_value(self) -> Value:
         return self._value
@@ -133,7 +133,7 @@ class NumberWidget(QWidget):
     def _setup_ui(self) -> None:
         self.hlayout = QHBoxLayout(self)
         self.setLayout(self.hlayout)
-        self.hlayout.setContentsMargins(0, 0, 0, 0)
+        self.hlayout.setContentsMargins(3, 0, 3, 0)
         self.hlayout.setSpacing(1)
         self.hlayout.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
 
@@ -141,6 +141,18 @@ class NumberWidget(QWidget):
         self.hlayout.addWidget(self._sign_label, alignment=Qt.AlignmentFlag.AlignCenter)
         self._dot_label: QLabel | None = None
         self._setup_number()
+
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setAutoFillBackground(True)
+
+    def set_background_color(self, color: QColor) -> None:
+        rgba = f"rgba({color.red()}, {color.green()}, {color.blue()}, {color.alpha()})"
+        self.setStyleSheet(f"""
+            NumberWidget {{
+                background-color: {rgba};
+                border-radius: 5px;
+            }}
+        """)
 
     def _setup_number(self) -> None:
         # Clear previous widgets
@@ -156,7 +168,8 @@ class NumberWidget(QWidget):
 
         # Create new digits and add
         for i in range(self._digit_count):
-            digit_widget = DigitWidget(self, editable=self._editable)
+            digit_widget = DigitWidget(self)
+            digit_widget.set_editable(self._editable)
             self._digits.append(digit_widget)
             self.hlayout.addWidget(digit_widget, alignment=Qt.AlignmentFlag.AlignCenter)
             digit_widget.clicked.connect(partial(self.handle_clicked, self._digit_count - i - 1))
@@ -170,45 +183,58 @@ class NumberWidget(QWidget):
             self.hlayout.insertWidget(dot_index + 1, self._dot_label, alignment=Qt.AlignmentFlag.AlignCenter)
 
     def _update_value_display(self) -> None:
-        if self._value.is_overload() and len(self._digits) > 1:
-            self._digits[-1].set_value("L")
-            self._digits[-2].set_value("O")
+        if (
+            self._value.is_overload()
+            and len(self._digits) > 1
+            and (self._value.get() <= float("-inf") or self._value.get() >= float("inf"))
+        ):
+            self._digits[-1].set_value("O")
+            self._digits[-2].set_value("L")
             for digit_widget in self._digits[:-2]:
                 digit_widget.setVisible(False)
+            for digit_widget in self._digits:
+                digit_widget.set_error(True)
             if self._dot_label is not None:
                 self._dot_label.setVisible(False)
-        elif self._value.is_overload() and len(self._digits) == 1:
-            self._digits[-1].set_value("O")
-            for digit_widget in self._digits[:-1]:
-                digit_widget.setVisible(False)
-            if self._dot_label is not None:
-                self._dot_label.setVisible(False)
-        else:
-            for i, digit_widget in enumerate(reversed(self._digits)):
+
+        elif self._value.is_overload():
+            self._update_digits()
+            for digit_widget in self._digits:
+                digit_widget.set_error(True)
+
+        elif self._value.is_invalid():
+            for digit_widget in self._digits:
+                digit_widget.set_error(False)
+                digit_widget.set_value("-")
                 digit_widget.setVisible(True)
-                if self._dot_label is not None:
-                    self._dot_label.setVisible(True)
-                if self._value.is_ok():
-                    rounded = round(self._value.get(), self._digit_count)
-                    digit_value = int(round(abs(rounded) / self._calculate_multiplier(i), self._digit_count)) % 10
-                    digit_widget.set_value(str(digit_value))
+            if self._dot_label is not None:
+                self._dot_label.setVisible(False)
 
-                elif self._value.is_invalid():
-                    digit_widget.set_value("-")
-
-                else:
-                    raise RuntimeError(f"Unknown value condition: {self._value.condition}")
+        elif self._value.is_ok():
+            self._update_digits()
+            if self._dot_label is not None:
+                self._dot_label.setVisible(True)
+            for digit_widget in self._digits:
+                digit_widget.set_error(False)
+                digit_widget.setVisible(True)
 
         self._sign_label.setVisible(self.calculate_sign_visibility())
 
+    def _update_digits(self) -> None:
+        for i, digit_widget in enumerate(reversed(self._digits)):
+            if self._value.is_ok() or self._value.is_overload():
+                rounded = round(self._value.get(), self._digit_count)
+                digit_value = int(round(abs(rounded) / self._calculate_multiplier(i), self._digit_count)) % 10
+                digit_widget.set_value(str(digit_value))
+
     def calculate_sign_visibility(self) -> bool:
         if self._invert_controls:
-            if self._value.is_invalid() or self._value.is_overload():
+            if self._value.is_invalid():
                 return True
             else:
                 return self._value.get() <= 0
         else:
-            if self._value.is_invalid() or self._value.is_overload():
+            if self._value.is_invalid():
                 return False
             else:
                 return self._value.get() < 0
@@ -246,22 +272,18 @@ class NumberWidget(QWidget):
             m = 10**self._digit_count - 1
         return max(min(value, m), -m)
 
-    def clamp_value(self, value: float) -> float:
-        return max(min(value, self._max_value), self._min_value)
+    def clamp_value(self, value: Value) -> Value:
+        return Value(max(min(value.get(), self._max_value), self._min_value), value.condition)
 
     def handle_increment(self, digit_index: int) -> None:
         mult = self._calculate_multiplier(digit_index)
-        value = Value(
-            self.clamp_value((self._value.get() + mult) if not self._invert_controls else self._value.get() - mult)
-        )
-        self.set_value(value)
+        new_value = self._value.get() + mult if not self._invert_controls else self._value.get() - mult
+        self.set_value(new_value)
 
     def handle_decrement(self, digit_index: int) -> None:
         mult = self._calculate_multiplier(digit_index)
-        value = Value(
-            self.clamp_value((self._value.get() - mult) if not self._invert_controls else self._value.get() + mult)
-        )
-        self.set_value(value)
+        new_value = self._value.get() - mult if not self._invert_controls else self._value.get() + mult
+        self.set_value(new_value)
 
     def handle_clicked(self, digit_index: int) -> None:
         self.select_digit(digit_index)
@@ -321,8 +343,12 @@ class NumberWidget(QWidget):
                 else:
                     new_value = -new_mag if self._invert_controls else new_mag
 
-                new_value = self.clamp_value(new_value)
-                self.set_value(Value(new_value))
+                if self._selected_digit > 0:
+                    self.select_digit(self._selected_digit - 1)
+                else:
+                    self.focusNextChild()
+
+                self.set_value(new_value)
 
             elif event.key() == Qt.Key.Key_Escape:
                 self.select_digit(None)

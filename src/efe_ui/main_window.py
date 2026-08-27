@@ -123,7 +123,6 @@ class MainWindow(QMainWindow):
 
         for i in range(CHANNEL_COUNT):
             self._global_widget.is_disabled_changed.connect(partial(device_widget.set_is_disabled, channel=i))
-            self._global_widget.is_diode_mode_changed.connect(partial(device_widget.set_is_diode_mode, channel=i))
             self._global_widget.is_high_range_changed.connect(partial(device_widget.set_is_high_range, channel=i))
             self._global_widget.value_changed.connect(partial(device_widget.set_set_value, channel=i))
 

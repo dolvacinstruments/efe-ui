@@ -25,7 +25,6 @@ class DeviceWidget(QWidget):
         self._setup_device()
         self._setup_ui()
         self._connect_signals()
-        print(Value(0))
 
     def _setup_device(self) -> None:
         self._device = EFE(self._ip)
@@ -95,7 +94,6 @@ class DeviceWidget(QWidget):
             channel_widget.value_changed.connect(partial(self._device.set_value, i))
             channel_widget.is_disabled_changed.connect(partial(self._device.set_disabled, i))
             channel_widget.is_high_range_changed.connect(partial(self._device.set_high_range, i))
-            channel_widget.is_diode_mode_changed.connect(partial(self._device.set_diode_mode, i))
 
     @Slot()
     def disconnect_from_device(self) -> None:
@@ -110,14 +108,11 @@ class DeviceWidget(QWidget):
     def handle_measured_update(self, measured: DeviceMeasured) -> None:
         for i in range(CHANNEL_COUNT):
             channel_widget = self._channel_widgets[i]
-            if not channel_widget.is_disabled():
-                channel_widget.set_measure_value(VariableType.VOLTAGE_C, measured.voltage_c[i])
-                channel_widget.set_measure_value(VariableType.CURRENT_C, measured.current[i])
-                channel_widget.set_measure_value(VariableType.VOLTAGE_E, measured.voltage_e[i])
-            else:
-                channel_widget.set_measure_value(VariableType.VOLTAGE_C, Value.invalid())
-                channel_widget.set_measure_value(VariableType.CURRENT_C, Value.invalid())
-                channel_widget.set_measure_value(VariableType.VOLTAGE_E, Value.invalid())
+            channel_widget.set_measure_value(VariableType.VOLTAGE_C, measured.voltage_c[i])
+            channel_widget.set_measure_value(VariableType.CURRENT_C, measured.current[i])
+            channel_widget.set_measure_value(VariableType.VOLTAGE_E, measured.voltage_e[i])
+            channel_widget.set_cathode_state(measured.state_c[i])
+            channel_widget.set_extraction_state(measured.state_e[i])
 
     @Slot()
     def handle_force_disable(self) -> None:
@@ -135,12 +130,6 @@ class DeviceWidget(QWidget):
         if channel < 0 or channel >= CHANNEL_COUNT:
             raise ValueError(f"Channel {channel} is out of range. Must be between 0 and {CHANNEL_COUNT - 1}.")
         self._channel_widgets[channel].set_is_disabled(is_disabled)
-
-    @Slot(bool, int)
-    def set_is_diode_mode(self, is_diode_mode: bool, channel: int) -> None:
-        if channel < 0 or channel >= CHANNEL_COUNT:
-            raise ValueError(f"Channel {channel} is out of range. Must be between 0 and {CHANNEL_COUNT - 1}.")
-        self._channel_widgets[channel].set_is_diode_mode(is_diode_mode)
 
     @Slot(bool, int)
     def set_is_high_range(self, is_high_range: bool, channel: int) -> None:

@@ -14,13 +14,14 @@ class DigitWidget(QWidget):
     incremented = Signal()
     decremented = Signal()
 
-    def __init__(self, parent: QWidget | None = None, editable: bool = False, selected: bool = False) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
         self._value: str = "-"
 
-        self._is_editable = editable
-        self._is_selected = selected
+        self._is_editable = False
+        self._is_selected = False
+        self._is_error = False
         self._is_hovered_over = False
 
         self._setup_ui()
@@ -30,46 +31,17 @@ class DigitWidget(QWidget):
         self._value = value
         self._digit_button.setText(self._get_text())
 
-        if value == "-":
-            self._style_non_editable()
-            self._style_unhovered()
-            self._style_unselected()
-        elif value.isdigit():
-            if self._is_editable:
-                self._style_editable()
-                if self._is_hovered_over:
-                    self._style_hovered()
-            if self._is_selected:
-                self._style_selected()
-        else:
-            self._style_error()
-            self._style_unhovered()
-            self._style_unselected()
-
     def set_editable(self, editable: bool) -> None:
         self._is_editable = editable
-        if editable and self._value.isdigit():
-            self._style_editable()
-            if self._is_hovered_over:
-                self._style_hovered()
-            if self._is_selected:
-                self._style_selected()
-        else:
-            self._style_non_editable()
-            if self._is_hovered_over:
-                self._style_unhovered()
-            if self._is_selected:
-                self._is_selected = False
-                self._style_unselected()
+        self._update_style()
 
     def set_selected(self, selected: bool) -> None:
-        if not self._is_editable:
-            raise RuntimeError("Cannot select a digit that is not editable.")
         self._is_selected = selected
-        if selected:
-            self._style_selected()
-        else:
-            self._style_unselected()
+        self._update_style()
+
+    def set_error(self, error: bool) -> None:
+        self._is_error = error
+        self._update_style()
 
     def is_hovered_over(self) -> bool:
         return self._is_hovered_over
@@ -77,13 +49,12 @@ class DigitWidget(QWidget):
     def enterEvent(self, event: QEnterEvent) -> None:
         super().enterEvent(event)
         self._is_hovered_over = True
-        if self._is_editable:
-            self._style_hovered()
+        self._update_style()
 
     def leaveEvent(self, event: QEvent) -> None:
         super().leaveEvent(event)
         self._is_hovered_over = False
-        self._style_unhovered()
+        self._update_style()
 
     def wheelEvent(self, event: QWheelEvent) -> None:
         if self._is_editable:
@@ -120,10 +91,36 @@ class DigitWidget(QWidget):
         self._digit_button.clicked.connect(self.clicked)
         self._down_button.clicked.connect(self.decremented)
 
-    def _style_editable(self) -> None:
+    def _update_style(self) -> None:
+        if self._is_error and self._is_editable:
+            self._style_editable_error()
+        elif self._is_error and not self._is_editable:
+            self._style_non_editable_error()
+        elif not self._is_error and self._is_editable:
+            self._style_editable_ok()
+        elif not self._is_error and not self._is_editable:
+            self._style_non_editable_ok()
+
+        if self._is_selected and self._is_editable and not self._is_error:
+            self._style_selected()
+        else:
+            self._style_unselected()
+
+        if self._is_hovered_over and self._is_editable and not self._is_error:
+            self._style_hovered()
+        else:
+            self._style_unhovered()
+
+    def _style_editable_ok(self) -> None:
         for button in [self._up_button, self._digit_button, self._down_button]:
             button.setEnabled(True)
             button.setStyleSheet("""
+                QPushButton {
+                    color: palette(window-text);
+                    background-color: transparent;
+                    border: none;
+                    padding: 0px;
+                }
                 QPushButton:hover {
                     color: palette(mid);
                 }
@@ -139,7 +136,7 @@ class DigitWidget(QWidget):
                 }
             """)
 
-    def _style_non_editable(self) -> None:
+    def _style_non_editable_ok(self) -> None:
         for button in [self._up_button, self._digit_button, self._down_button]:
             button.setEnabled(False)
             button.setStyleSheet("""
@@ -151,7 +148,32 @@ class DigitWidget(QWidget):
                 }
             """)
 
-    def _style_error(self) -> None:
+    def _style_editable_error(self) -> None:
+        for button in [self._up_button, self._digit_button, self._down_button]:
+            button.setEnabled(True)
+            button.setStyleSheet("""
+                QPushButton {
+                    color: red;
+                    background-color: transparent;
+                    border: none;
+                    padding: 0px;
+                }
+                QPushButton:hover {
+                    color: red;
+                }
+                QPushButton:pressed {
+                    color: palette(window-text);
+                    background-color: transparent;
+                    border: none;
+                    padding: 0px;
+                }
+                QPushButton[selected="true"] {
+                    background-color: palette(highlight);
+                    border: 1px solid palette(highlight);
+                }
+            """)
+
+    def _style_non_editable_error(self) -> None:
         for button in [self._up_button, self._digit_button, self._down_button]:
             button.setEnabled(False)
             button.setStyleSheet("""

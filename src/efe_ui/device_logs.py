@@ -4,7 +4,7 @@ import struct
 from PySide6.QtCore import QObject, Slot
 
 LOG_CONTENT_MAX_LEN = 100
-HEADER_FORMAT = "<I Q I"  # Little-endian: uint32 (id), uint64 (timestamp), uint32 (level)
+HEADER_FORMAT = "<I Q b"  # Little-endian: uint32 (id), uint64 (timestamp), char (level)
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 BUFFER_SIZE = HEADER_SIZE + LOG_CONTENT_MAX_LEN
 
@@ -35,10 +35,16 @@ class DeviceLogs(QObject):
                     print(f"[{addr[0]}] Received truncated packet ({len(data)} bytes)")
                     continue
 
-                device_id, timestamp, level_raw = struct.unpack(HEADER_FORMAT, data[:HEADER_SIZE])
+                device_id, timestamp_raw, level_raw = struct.unpack(HEADER_FORMAT, data[:HEADER_SIZE])
+
+                timestamp = timestamp_raw / 10_000_000
                 level_str = LOG_LEVEL_MAP.get(level_raw, f"UNKNOWN({level_raw})")
 
-                raw_content = data[HEADER_SIZE:]
-                content_str = raw_content.split(b"\x00")[0].decode("utf-8", errors="replace").strip()
+                content_raw = data[HEADER_SIZE:]
+                content_str = list(x.decode("utf-8", errors="replace").strip() for x in content_raw.split(b"\x00"))
 
-                print(f"[{timestamp}] [Device: {device_id}] [{level_str}]: {content_str}")
+                if len(content_str) <= 1:
+                    print(f"[{addr[0]}] Received log with no content")
+                    continue
+                else:
+                    print(f"[{timestamp:.3f}][D:{device_id:x}][{level_str}][{content_str[0]}] {content_str[1]}")
