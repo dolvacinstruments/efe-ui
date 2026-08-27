@@ -62,8 +62,8 @@ steps:
     - mkdir -p ~/.ssh
     - echo "ftp.cluster100.hosting.ovh.net ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDzgDZB8iYU8CvRn8DkDn4GGZoYN6Kw+Go7O16vL2aeF" >> ~/.ssh/known_hosts 
     - |
-      lftp $SFTP_PATH -e '
-        mirror -R --verbose dist/ packages/$${PKG_NAME}/;
+      lftp $SFTP_PATH -e "
+        mirror -R --verbose -X '.*' dist/ packages/$${PKG_NAME}/;
         put manifest.json -o packages/$${PKG_NAME}.json;
         put static-index/$${PKG_NAME}/index.html -o packages/$${PKG_NAME}/index.html;
-        exit'
+        exit"
