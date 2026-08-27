@@ -1,0 +1,57 @@
+when:
+- evaluate: 'CI_PIPELINE_EVENT == "tag" && CI_COMMIT_TAG matches "^v?[0-9]+\\.[0-9]+\\.[0-9]+$"'
+
+depends_on:
+- test
+
+steps:
+- name: Build and Publish
+  image: ghcr.io/astral-sh/uv:debian-slim
+  environment:
+    SFTP_PATH:
+      from_secret: SFTP_PATH
+  commands:
+    # 1. Prepare the environment
+    - apt update
+    - apt install -y lftp
+
+    # 3. Extract and normalize PEP 503 package name from the built wheel
+    - export PKG_NAME=$(python3 -c "import glob, pathlib; print(pathlib.Path(glob.glob('dist/*.whl')[0]).name.split('-')[0].lower().replace('_', '-'))")
+    - echo "Deploying package: ${PKG_NAME}"
+
+    # 4. Download the specific package manifest
+    - curl -s -f "https://packages.dolvac.com/${PKG_NAME}.json" -o manifest.json || echo "" > manifest.json
+
+    # 5. Update the manifest with the new version
+    - python3 -c "
+        import glob, json, hashlib, pathlib
+        manifest = pathlib.Path('manifest.json')
+        lines = set(manifest.read_text().splitlines()) if manifest.exists() else set()
+        
+        for filepath in glob.glob('dist/*'):
+            p = pathlib.Path(filepath)
+            entry = {
+                'filename': p.name,
+                'hash': f'sha256={hashlib.sha256(p.read_bytes()).hexdigest()}',
+                'requires_python': '>=3.10'
+            }
+            lines.add(json.dumps(entry))
+            
+        manifest.write_text('\n'.join(sorted(lines)) + '\n')
+        "    
+      
+    # 6. Generate index HTML for THIS package
+    - uvx dumb-pypi \
+        --package-list manifest.json \
+        --packages-url https://packages.dolvac.com/{$PKG_NAME} \
+        --output-dir static-index
+
+    # 7. Upload the package
+    - mkdir -p ~/.ssh
+    - echo "ftp.cluster100.hosting.ovh.net ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDzgDZB8iYU8CvRn8DkDn4GGZoYN6Kw+Go7O16vL2aeF" >> ~/.ssh/known_hosts 
+    - |
+      lftp $SFTP_PATH -e '
+        mirror -R --verbose dist/ packages/${PKG_NAME}/;
+        mirror -R --verbose manifest.json -o packages/${PKG_NAME}.json;
+        mirror -R --verbose static-index/${PKG_NAME}/index.html packages/${PKG_NAME}/index.html;
+        exit'
