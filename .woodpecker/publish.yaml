@@ -68,5 +68,5 @@ steps:
       lftp $SFTP_PATH -e "
         mirror -R --verbose -X '.*' dist/ packages/$${PKG_NAME}/;
         put manifest.json -o packages/$${PKG_NAME}.json;
-        put static-index/$${PKG_NAME}/index.html -o packages/$${PKG_NAME}/index.html;
+        put static-index/simple/$${PKG_NAME}/index.html -o packages/$${PKG_NAME}/index.html;
         exit"
