@@ -1,5 +1,5 @@
 when:
-- event: tag
+- event: [tag, manual]
 - evaluate: 'CI_PIPELINE_EVENT == "tag" && CI_COMMIT_TAG matches "^v?[0-9]+[.][0-9]+[.][0-9]+$"'
 
 clone:
