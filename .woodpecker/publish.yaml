@@ -26,7 +26,7 @@ steps:
 
     # 3. Extract and normalize PEP 503 package name from the built wheel
     - export PKG_NAME=$(python3 -c "import glob, pathlib; print(pathlib.Path(glob.glob('dist/*.whl')[0]).name.split('-')[0].lower().replace('_', '-'))")
-    - echo "Deploying package: ${PKG_NAME}"
+    - 'echo "Deploying package: ${PKG_NAME}"'
 
     # 4. Download the specific package manifest
     - curl -s -f "https://packages.dolvac.com/${PKG_NAME}.json" -o manifest.json || echo "" > manifest.json
