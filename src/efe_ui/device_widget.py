@@ -25,13 +25,14 @@ class DeviceWidget(QWidget):
         self._setup_device()
         self._setup_ui()
         self._connect_signals()
+        self._thread.start()
 
     def _setup_device(self) -> None:
         self._device = EFE(self._ip)
         self._thread = QThread(self)
         self._device.moveToThread(self._thread)
         self._thread.started.connect(self._device.start_loop)
-        self._thread.start()
+        
 
     def _setup_ui(self) -> None:
         self.setObjectName("device_widget")
@@ -73,7 +74,7 @@ class DeviceWidget(QWidget):
         title_layout.addWidget(title_label)
         title_layout.setContentsMargins(10, 0, 10, 0)
 
-        self._status_label = create_title_bar_label("Connecting...")
+        self._status_label = create_title_bar_label("INITIAL")
         self._status_label.setStyleSheet("color: red;")
         title_layout.addWidget(self._status_label)
 
@@ -87,6 +88,7 @@ class DeviceWidget(QWidget):
         self.disconnect_requested.connect(self._device.stop_worker)
         self._device.measured_updated.connect(self.handle_measured_update)
         self._device.status_updated.connect(self.update_device_status)
+        print(f"Connected {id(self._device.status_updated)} to update_device_status")
         self._device.force_disable.connect(self.handle_force_disable)
         self._thread.finished.connect(self._handle_thread_exit)
 
@@ -139,6 +141,7 @@ class DeviceWidget(QWidget):
 
     @Slot(DeviceStatus)
     def update_device_status(self, status: DeviceStatus) -> None:
+        print(f"Device {self._device_name} ({self._ip}) status updated: {status.kind.name} - {status.message}")
         if self._last_status is not None and self._last_status.message == status.message:
             return  # No change in status, do nothing
         self._last_status = status
