@@ -3,7 +3,7 @@ when:
 
 steps:
 - name: Test
-  image: ghcr.io/astral-sh/uv:alpine
+  image: ghcr.io/astral-sh/uv:debian-slim
   commands:
     - uv sync --frozen --no-install-project
     - uv run ruff check .
