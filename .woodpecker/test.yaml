@@ -1,0 +1,11 @@
+when:
+- event: push
+
+steps:
+- name: Test
+  image: ghcr.io/astral-sh/uv:alpine
+  commands:
+    - uv sync --frozen --no-install-project
+    - uv run ruff check .
+    - uv run ruff format --check .
+    - uv run ty check .
