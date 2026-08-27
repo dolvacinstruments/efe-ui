@@ -32,7 +32,6 @@ class DeviceWidget(QWidget):
         self._thread = QThread(self)
         self._device.moveToThread(self._thread)
         self._thread.started.connect(self._device.start_loop)
-        
 
     def _setup_ui(self) -> None:
         self.setObjectName("device_widget")
