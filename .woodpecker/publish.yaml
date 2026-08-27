@@ -2,6 +2,13 @@ when:
 - event: tag
 - evaluate: 'CI_PIPELINE_EVENT == "tag" && CI_COMMIT_TAG matches "^v?[0-9]+[.][0-9]+[.][0-9]+$"'
 
+clone:
+  git:
+    image: woodpeckerci/plugin-git
+    settings:
+      tags: true
+      depth: 0
+
 depends_on:
 - test
 
