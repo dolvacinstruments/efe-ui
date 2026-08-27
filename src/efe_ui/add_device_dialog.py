@@ -1,6 +1,11 @@
-from PySide6.QtCore import QRegularExpression
-from PySide6.QtGui import QRegularExpressionValidator
+import time
+
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QLineEdit, QVBoxLayout, QWidget
+from zeroconf import (
+    ServiceBrowser,
+    ServiceStateChange,
+    Zeroconf,
+)
 
 
 class AddDeviceDialog(QDialog):
@@ -9,6 +14,11 @@ class AddDeviceDialog(QDialog):
         self.setWindowTitle("Add Device")
         self.setModal(True)
         self.setup_ui()
+        self.start_mdns_listener()
+
+    def __del__(self) -> None:
+        if hasattr(self, "zeroconf"):
+            self.zeroconf.close()
 
     def setup_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -30,16 +40,9 @@ class AddDeviceDialog(QDialog):
         layout.addWidget(self._button_box)
 
     def _create_ip_input(self, layout: QVBoxLayout) -> None:
-        ip_range = r"(?:[0-1]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])"
-        ip_regex = QRegularExpression(f"^{ip_range}\\.{ip_range}\\.{ip_range}\\.{ip_range}$")
-
         self.device_ip_edit = QLineEdit(self)
-        self.device_ip_edit.setPlaceholderText("Enter device IP")
+        self.device_ip_edit.setPlaceholderText("Enter device address")
         self.device_ip_edit.textChanged.connect(self._check_input_state)
-
-        validator = QRegularExpressionValidator(ip_regex, self)
-
-        self.device_ip_edit.setValidator(validator)
 
         layout.addWidget(self.device_ip_edit)
 
@@ -50,3 +53,28 @@ class AddDeviceDialog(QDialog):
 
     def get_data(self) -> tuple[str, str]:
         return self.device_name_edit.text().strip(), self.device_ip_edit.text().strip()
+
+    def mdns_listener(self, zeroconf: Zeroconf, service_type: str, name: str, state_change: ServiceStateChange) -> None:
+        print(f"Service {name} of type {service_type} state changed: {state_change}")
+        if state_change is ServiceStateChange.Added:
+            info = zeroconf.get_service_info(service_type, name)
+            print(f"Info from zeroconf.get_service_info: {info!r}")
+
+            if info:
+                addresses = [f"{addr}:{int(info.port)}" for addr in info.parsed_scoped_addresses()]
+                print(f"  Addresses: {', '.join(addresses)}")
+                print(f"  Weight: {info.weight}, priority: {info.priority}")
+                print(f"  Server: {info.server}")
+                if info.properties:
+                    print("  Properties are:")
+                    for key, value in info.properties.items():
+                        print(f"    {key!r}: {value!r}")
+                else:
+                    print("  No properties")
+            else:
+                print("  No info")
+            print("\n")
+
+    def start_mdns_listener(self) -> None:
+        self.zeroconf = Zeroconf()
+        self.browser = ServiceBrowser(self.zeroconf, "_scpi._tcp.local.", [self.mdns_listener])
