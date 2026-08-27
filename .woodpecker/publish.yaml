@@ -1,5 +1,6 @@
 when:
-- evaluate: 'CI_PIPELINE_EVENT == "tag" && CI_COMMIT_TAG matches "^v?[0-9]+\\.[0-9]+\\.[0-9]+$"'
+- event: tag
+- evaluate: 'CI_PIPELINE_EVENT == "tag" && CI_COMMIT_TAG matches "^v?[0-9]+[.][0-9]+[.][0-9]+$"'
 
 depends_on:
 - test
