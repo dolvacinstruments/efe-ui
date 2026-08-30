@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class DeviceListener(QObject):
-    device_added = Signal(str, str, str)
+    device_added = Signal(str, str, str, str)
     device_removed = Signal(str)
 
     def __init__(self, parent: QObject | None = None) -> None:
@@ -46,8 +46,10 @@ class DeviceListener(QObject):
                         logger.info(f"    {key!r}: {value!r}")
                 else:
                     logger.info("  No properties")
+
                 self.device_added.emit(
                     name,
+                    info.properties.get(b'user_name', b'').decode('utf-8') if info.properties else "",
                     addresses[0].split(":")[0] if addresses else "",
                     info.server.split(".")[0] if info.server else "",
                 )
@@ -117,10 +119,10 @@ class AddDeviceDialog(QDialog):
                 self.device_list.takeItem(i)
                 break
 
-    @Slot(str, str, str)
-    def _device_added(self, name: str, address: str, server: str) -> None:
-        item = QListWidgetItem(f"{server} ({address})")
-        item.setData(Qt.ItemDataRole.UserRole, (name, address, server))
+    @Slot(str, str, str, str)
+    def _device_added(self, name: str, username: str, address: str, server: str) -> None:
+        item = QListWidgetItem(f"{username if username else ''} {server} ({address})")
+        item.setData(Qt.ItemDataRole.UserRole, (name, username, address, server))
         spinner_row = self.device_list.row(self.spinner_item)
         if spinner_row != -1:
             self.device_list.insertItem(spinner_row, item)
@@ -129,8 +131,8 @@ class AddDeviceDialog(QDialog):
 
     @Slot(QListWidgetItem)
     def _device_selected(self, item: QListWidgetItem) -> None:
-        name, address, server = item.data(Qt.ItemDataRole.UserRole)
-        self.device_name_edit.setText(server)
+        name, username, address, server = item.data(Qt.ItemDataRole.UserRole)
+        self.device_name_edit.setText(username if username else server)
         self.device_ip_edit.setText(address)
 
     @Slot(str, str)
