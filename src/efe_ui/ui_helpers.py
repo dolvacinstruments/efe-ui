@@ -1,3 +1,4 @@
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QLineEdit, QPushButton, QSizePolicy, QWidget
 
 from efe_ui.constants import TITLE_BAR_FONT_SIZE
@@ -50,7 +51,12 @@ def set_font(widget: QWidget, font_size: int, bold: bool = False) -> None:
 
 
 def get_text_width(widget: QWidget, text: str | list[str]) -> int:
+    widget.ensurePolished()
     metrics = widget.fontMetrics()
-    if isinstance(text, list):
-        return max(metrics.horizontalAdvance(t) for t in text)
-    return metrics.horizontalAdvance(text)
+
+    text_list = text if isinstance(text, list) else [text]
+    max_width = 0
+    for item in text_list:
+        rect = metrics.boundingRect(0, 0, 0, 0, Qt.TextFlag.TextSingleLine, str(item))
+        max_width = max(max_width, rect.width())
+    return max_width

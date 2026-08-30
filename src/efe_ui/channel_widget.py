@@ -83,19 +83,21 @@ class ChannelWidget(QWidget):
 
         title_layout = QHBoxLayout(title_bar)
         title_bar.setLayout(title_layout)
-        title_layout.setContentsMargins(0, 0, 0, 0)
+        title_layout.setContentsMargins(5, 1, 5, 1)
         title_layout.setSpacing(5)
 
-        self.enable_switch = TitleBarSwitch("", "OFF 🔴", "ON 🟢")
-        title_layout.addWidget(self.enable_switch)
+        self.enable_switch = TitleBarSwitch("", "OFF", "ON", QColor(255, 0, 0), QColor(11, 212, 0))
+        title_layout.addWidget(self.enable_switch, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
         self.channel_label = create_title_bar_label(self._channel_name)
-        title_layout.addWidget(self.channel_label)
+        title_layout.addWidget(self.channel_label, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
         title_layout.addStretch()
 
-        self.range_switch = TitleBarSwitch("Range:", "H 🟧", "L 🟦")
-        title_layout.addWidget(self.range_switch)
+        self.range_switch = TitleBarSwitch(
+            "Range:", "H", "L", QColor(240, 150, 14), QColor(32, 80, 176), use_square=True
+        )
+        title_layout.addWidget(self.range_switch, alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
     def _add_numbers(self, layout: QVBoxLayout) -> None:
         self.grid = QGridLayout()
