@@ -246,6 +246,9 @@ class NumberWidget(QWidget):
         dot_label.setFont(font)
         dot_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         dot_label.setFixedWidth(get_digit_width())
+        retain_policy = dot_label.sizePolicy()
+        retain_policy.setRetainSizeWhenHidden(True)
+        dot_label.setSizePolicy(retain_policy)
         return dot_label
 
     def _create_sign(self) -> QLabel:

@@ -236,7 +236,7 @@ def get_digit_width() -> int:
         default_font = QApplication.font()
         default_font.setPointSize(DIGIT_FONT_SIZE)
         font_metrics = QFontMetrics(default_font)
-        _WIDTH = max(font_metrics.horizontalAdvance(c) for c in "0123456789")
+        _WIDTH = max(font_metrics.horizontalAdvance(c) for c in "0123456789-")
     return _WIDTH
 
 
