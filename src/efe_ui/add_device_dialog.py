@@ -1,11 +1,67 @@
-import time
+import logging
 
-from PySide6.QtWidgets import QDialog, QDialogButtonBox, QLineEdit, QVBoxLayout, QWidget
+from PySide6.QtCore import QObject, Qt, Signal, Slot
+from PySide6.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 from zeroconf import (
     ServiceBrowser,
     ServiceStateChange,
     Zeroconf,
 )
+
+logger = logging.getLogger(__name__)
+
+
+class DeviceListener(QObject):
+    device_added = Signal(str, str, str)
+    device_removed = Signal(str)
+
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self.zeroconf = Zeroconf()
+        self.browser = ServiceBrowser(self.zeroconf, "_scpi._tcp.local.", [self.mdns_listener])
+
+    def mdns_listener(self, zeroconf: Zeroconf, service_type: str, name: str, state_change: ServiceStateChange) -> None:
+        logger.info(f"Service {name} of type {service_type} state changed: {state_change}")
+        if state_change is ServiceStateChange.Added:
+            info = zeroconf.get_service_info(service_type, name)
+            logger.info(f"Info from zeroconf.get_service_info: {info!r}")
+
+            if info is not None and info.port is not None:
+                addresses = [f"{addr}:{int(info.port)}" for addr in info.parsed_scoped_addresses()]
+                logger.info(f"  Addresses: {', '.join(addresses)}")
+                logger.info(f"  Weight: {info.weight}, priority: {info.priority}")
+                logger.info(f"  Server: {info.server}")
+                if info.properties:
+                    logger.info("  Properties are:")
+                    for key, value in info.properties.items():
+                        logger.info(f"    {key!r}: {value!r}")
+                else:
+                    logger.info("  No properties")
+                self.device_added.emit(
+                    name,
+                    addresses[0].split(":")[0] if addresses else "",
+                    info.server.split(".")[0] if info.server else "",
+                )
+            else:
+                logger.info("  No info")
+            logger.info("\n")
+
+        if state_change is ServiceStateChange.Removed:
+            self.device_removed.emit(name)
+            logger.info(f"Service {name} removed")
+
+    def __del__(self) -> None:
+        if hasattr(self, "zeroconf"):
+            self.zeroconf.close()
 
 
 class AddDeviceDialog(QDialog):
@@ -13,14 +69,16 @@ class AddDeviceDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Add Device")
         self.setModal(True)
-        self.setup_ui()
-        self.start_mdns_listener()
+        self._setup_ui()
+        self.listener = self._setup_listener()
 
-    def __del__(self) -> None:
-        if hasattr(self, "zeroconf"):
-            self.zeroconf.close()
+    def _setup_listener(self) -> DeviceListener:
+        listener = DeviceListener(self)
+        listener.device_added.connect(self._device_added)
+        listener.device_removed.connect(self._device_removed)
+        return listener
 
-    def setup_ui(self) -> None:
+    def _setup_ui(self) -> None:
         layout = QVBoxLayout(self)
 
         self.device_name_edit = QLineEdit(self)
@@ -28,7 +86,19 @@ class AddDeviceDialog(QDialog):
         self.device_name_edit.textChanged.connect(self._check_input_state)
         layout.addWidget(self.device_name_edit)
 
-        self._create_ip_input(layout)
+        self.device_ip_edit = QLineEdit(self)
+        self.device_ip_edit.setPlaceholderText("Enter device address")
+        self.device_ip_edit.textChanged.connect(self._check_input_state)
+        layout.addWidget(self.device_ip_edit)
+
+        label = QLabel("Discovered devices (click to select):", self)
+        layout.addWidget(label)
+
+        self.device_list = QListWidget(self)
+        layout.addWidget(self.device_list)
+        self.device_list.itemClicked.connect(self._device_selected)
+        self.spinner_item = self._create_spinner_item()
+        self.device_list.addItem(self.spinner_item)
 
         self._button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
@@ -39,13 +109,31 @@ class AddDeviceDialog(QDialog):
 
         layout.addWidget(self._button_box)
 
-    def _create_ip_input(self, layout: QVBoxLayout) -> None:
-        self.device_ip_edit = QLineEdit(self)
-        self.device_ip_edit.setPlaceholderText("Enter device address")
-        self.device_ip_edit.textChanged.connect(self._check_input_state)
+    @Slot(str)
+    def _device_removed(self, name: str) -> None:
+        for i in range(self.device_list.count()):
+            item = self.device_list.item(i)
+            if item.data(Qt.ItemDataRole.UserRole)[0] == name:
+                self.device_list.takeItem(i)
+                break
 
-        layout.addWidget(self.device_ip_edit)
+    @Slot(str, str, str)
+    def _device_added(self, name: str, address: str, server: str) -> None:
+        item = QListWidgetItem(f"{server} ({address})")
+        item.setData(Qt.ItemDataRole.UserRole, (name, address, server))
+        spinner_row = self.device_list.row(self.spinner_item)
+        if spinner_row != -1:
+            self.device_list.insertItem(spinner_row, item)
+        else:
+            self.device_list.addItem(item)
 
+    @Slot(QListWidgetItem)
+    def _device_selected(self, item: QListWidgetItem) -> None:
+        name, address, server = item.data(Qt.ItemDataRole.UserRole)
+        self.device_name_edit.setText(server)
+        self.device_ip_edit.setText(address)
+
+    @Slot(str, str)
     def _check_input_state(self) -> None:
         name_valid = bool(self.device_name_edit.text().strip())
         ip_valid = self.device_ip_edit.hasAcceptableInput()
@@ -54,27 +142,10 @@ class AddDeviceDialog(QDialog):
     def get_data(self) -> tuple[str, str]:
         return self.device_name_edit.text().strip(), self.device_ip_edit.text().strip()
 
-    def mdns_listener(self, zeroconf: Zeroconf, service_type: str, name: str, state_change: ServiceStateChange) -> None:
-        print(f"Service {name} of type {service_type} state changed: {state_change}")
-        if state_change is ServiceStateChange.Added:
-            info = zeroconf.get_service_info(service_type, name)
-            print(f"Info from zeroconf.get_service_info: {info!r}")
-
-            if info:
-                addresses = [f"{addr}:{int(info.port)}" for addr in info.parsed_scoped_addresses()]
-                print(f"  Addresses: {', '.join(addresses)}")
-                print(f"  Weight: {info.weight}, priority: {info.priority}")
-                print(f"  Server: {info.server}")
-                if info.properties:
-                    print("  Properties are:")
-                    for key, value in info.properties.items():
-                        print(f"    {key!r}: {value!r}")
-                else:
-                    print("  No properties")
-            else:
-                print("  No info")
-            print("\n")
-
-    def start_mdns_listener(self) -> None:
-        self.zeroconf = Zeroconf()
-        self.browser = ServiceBrowser(self.zeroconf, "_scpi._tcp.local.", [self.mdns_listener])
+    def _create_spinner_item(self) -> QListWidgetItem:
+        item = QListWidgetItem("Searching...")
+        flags = item.flags()
+        flags &= ~Qt.ItemFlag.ItemIsSelectable
+        flags &= ~Qt.ItemFlag.ItemIsEnabled
+        item.setFlags(flags)
+        return item
