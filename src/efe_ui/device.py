@@ -76,6 +76,7 @@ class CathodeState(StrEnum):
     CC = "CC"
     OFF = "OFF"
     UNSTABLE = "UNSTABLE"
+    LOCKOUT = "LOCKOUT"
     ERROR = "ERROR"
 
 
@@ -85,6 +86,7 @@ class ExtractionState(StrEnum):
     EKV = "KCV"
     OFF = "OFF"
     UNSTABLE = "UNSTABLE"
+    LOCKOUT = "LOCKOUT"
     ERROR = "ERROR"
 
 
