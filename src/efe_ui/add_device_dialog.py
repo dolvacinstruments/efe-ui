@@ -47,9 +47,15 @@ class DeviceListener(QObject):
                 else:
                     logger.info("  No properties")
 
+                username = None
+                if info.properties:
+                    username_raw = info.properties.get(b"user_name", b"")
+                    if username_raw:
+                        username = username_raw.decode("utf-8")
+
                 self.device_added.emit(
                     name,
-                    info.properties.get(b"user_name", b"").decode("utf-8") if info.properties else "",
+                    username,
                     addresses[0].split(":")[0] if addresses else "",
                     info.server.split(".")[0] if info.server else "",
                 )
