@@ -49,7 +49,7 @@ class DeviceListener(QObject):
 
                 self.device_added.emit(
                     name,
-                    info.properties.get(b'user_name', b'').decode('utf-8') if info.properties else "",
+                    info.properties.get(b"user_name", b"").decode("utf-8") if info.properties else "",
                     addresses[0].split(":")[0] if addresses else "",
                     info.server.split(".")[0] if info.server else "",
                 )
