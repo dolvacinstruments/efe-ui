@@ -34,7 +34,7 @@ APP_NAME = "EFE-UI"
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("EFE-UI")
+        self.setWindowTitle("Dolvac Instruments - EFE-UI")
 
         self.setup_ui()
         self.setup_menu()

@@ -17,10 +17,8 @@ def handle_signal(signum: int, _) -> None:  # noqa: ANN001
 
 def main() -> None:
     app = QApplication(sys.argv)
-    app.setApplicationName("EFE-UI")
     app.setOrganizationName("Dolvac Instruments")
     app.setOrganizationDomain("dolvac.com")
-    app.setApplicationDisplayName("EFE-UI")
 
     if sys.platform == "win32":
         import ctypes
