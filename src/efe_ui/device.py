@@ -68,10 +68,10 @@ class DeviceSetup:
         setup.is_disabled = [True] * CHANNEL_COUNT
         setup.is_high_range = [True] * CHANNEL_COUNT
 
-        setup.voltage_c = [0.0] * CHANNEL_COUNT
+        setup.voltage_c = [-5.0] * CHANNEL_COUNT
         setup.current_c = [0.0] * CHANNEL_COUNT
-        setup.voltage_e = [0.0] * CHANNEL_COUNT
-        setup.current_e = [0.0] * CHANNEL_COUNT
+        setup.voltage_e = [-5.0] * CHANNEL_COUNT
+        setup.current_e = [-100e-6] * CHANNEL_COUNT
 
         return setup
 

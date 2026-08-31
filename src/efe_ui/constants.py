@@ -18,6 +18,7 @@ class VariableType(Enum):
 @dataclass
 class RowConfig:
     label: str
+    value: float
     unit: str
     minimum: float
     maximum: float
@@ -30,6 +31,7 @@ class RowConfig:
 
 VC_ROW = RowConfig(
     label="V<sub>C</sub>:",
+    value=-5.0,
     unit="V",
     minimum=-1200.0,
     maximum=-5,
@@ -41,6 +43,7 @@ VC_ROW = RowConfig(
 
 VE_ROW = RowConfig(
     label="V<sub>E</sub>:",
+    value=-5.0,
     unit="V",
     minimum=-1200.0,
     maximum=-5,
@@ -52,6 +55,7 @@ VE_ROW = RowConfig(
 
 IC_HIGH_ROW = RowConfig(
     label="I<sub>C</sub>:",
+    value=0.0,
     unit="μA",
     minimum=-100.0,
     maximum=0,
@@ -63,6 +67,7 @@ IC_HIGH_ROW = RowConfig(
 
 IC_LOW_ROW = RowConfig(
     label="I<sub>C</sub>:",
+    value=0.0,
     unit="μA",
     minimum=-1.0,
     maximum=0,
@@ -74,6 +79,7 @@ IC_LOW_ROW = RowConfig(
 
 IE_HIGH_ROW = RowConfig(
     label="I<sub>E</sub>:",
+    value=-100.0,
     unit="μA",
     minimum=-100.0,
     maximum=0,
@@ -86,6 +92,7 @@ IE_HIGH_ROW = RowConfig(
 
 IE_LOW_ROW = RowConfig(
     label="I<sub>E</sub>:",
+    value=-1.0,
     unit="μA",
     minimum=-1.0,
     maximum=0,
