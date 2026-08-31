@@ -28,10 +28,6 @@ from efe_ui.number_widget import NumberWidget, Value
 from efe_ui.title_bar_switch import TitleBarSwitch
 from efe_ui.ui_helpers import create_title_bar_label
 
-GREEN = QColor(0, 255, 0, 20)
-RED = QColor(255, 0, 0, 40)
-TRANSPARENT = QColor(0, 0, 0, 0)
-
 
 class ChannelWidget(QWidget):
     is_disabled_changed = Signal(bool)
@@ -234,31 +230,31 @@ class ChannelWidget(QWidget):
 
     def set_cathode_state(self, state: CathodeState) -> None:
         if state == CathodeState.CV:
-            self.vc_set_widget.set_background_color(GREEN)
-            self.ic_set_widget.set_background_color(TRANSPARENT)
+            self.vc_set_widget.set_background_color("green")
+            self.ic_set_widget.set_background_color("transparent")
         elif state == CathodeState.CC:
-            self.vc_set_widget.set_background_color(TRANSPARENT)
-            self.ic_set_widget.set_background_color(GREEN)
+            self.vc_set_widget.set_background_color("transparent")
+            self.ic_set_widget.set_background_color("green")
         elif state == CathodeState.UNSTABLE:
-            self.vc_set_widget.set_background_color(RED)
-            self.ic_set_widget.set_background_color(RED)
+            self.vc_set_widget.set_background_color("red")
+            self.ic_set_widget.set_background_color("red")
         elif state == CathodeState.OFF or state == CathodeState.ERROR:
-            self.vc_set_widget.set_background_color(TRANSPARENT)
-            self.ic_set_widget.set_background_color(TRANSPARENT)
+            self.vc_set_widget.set_background_color("transparent")
+            self.ic_set_widget.set_background_color("transparent")
 
     def set_extraction_state(self, state: ExtractionState) -> None:
         if state == ExtractionState.CV:
-            self.ve_set_widget.set_background_color(GREEN)
-            self.ie_set_widget.set_background_color(TRANSPARENT)
+            self.ve_set_widget.set_background_color("green")
+            self.ie_set_widget.set_background_color("transparent")
         elif state == ExtractionState.CC:
-            self.ve_set_widget.set_background_color(TRANSPARENT)
-            self.ie_set_widget.set_background_color(GREEN)
+            self.ve_set_widget.set_background_color("transparent")
+            self.ie_set_widget.set_background_color("green")
         elif state == ExtractionState.EKV or state == ExtractionState.OFF:
-            self.ve_set_widget.set_background_color(TRANSPARENT)
-            self.ie_set_widget.set_background_color(TRANSPARENT)
+            self.ve_set_widget.set_background_color("transparent")
+            self.ie_set_widget.set_background_color("transparent")
         elif state == ExtractionState.UNSTABLE or state == ExtractionState.ERROR:
-            self.ve_set_widget.set_background_color(RED)
-            self.ie_set_widget.set_background_color(RED)
+            self.ve_set_widget.set_background_color("red")
+            self.ie_set_widget.set_background_color("red")
 
     def set_set_value(self, variable_type: VariableType, value: Value) -> None:
         if variable_type == VariableType.VOLTAGE_C:

@@ -40,8 +40,9 @@ class DigitWidget(QWidget):
         self._update_style()
 
     def set_error(self, error: bool) -> None:
+        if self._is_error != error:
+            self._update_style()
         self._is_error = error
-        self._update_style()
 
     def is_hovered_over(self) -> bool:
         return self._is_hovered_over

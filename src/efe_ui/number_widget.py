@@ -2,7 +2,7 @@ import math
 from dataclasses import dataclass
 from enum import Enum, auto
 from functools import partial
-from typing import Self
+from typing import Self, Literal
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFocusEvent, QKeyEvent
@@ -55,6 +55,9 @@ class Value:
         return float(self.number)
 
 
+NumberWidgetBackgroundColor = Literal["red", "green", "transparent"]
+
+
 class NumberWidget(QWidget):
     number_changed = Signal(object)
 
@@ -85,6 +88,8 @@ class NumberWidget(QWidget):
         self._setup_ui()
         self._value = Value(0)
         self.set_value(value)
+
+        self.background_color: NumberWidgetBackgroundColor = "transparent"
 
     def set_value(self, value: Value | float | int) -> None:
         old_value = self._value
@@ -145,14 +150,30 @@ class NumberWidget(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setAutoFillBackground(True)
 
-    def set_background_color(self, color: QColor) -> None:
-        rgba = f"rgba({color.red()}, {color.green()}, {color.blue()}, {color.alpha()})"
-        self.setStyleSheet(f"""
-            NumberWidget {{
-                background-color: {rgba};
-                border-radius: 5px;
-            }}
+        self.setStyleSheet("""
+            NumberWidget[bg_state="red"] { 
+                background-color: rgba(255, 0, 0, 0.157); 
+                border-radius: 5px; 
+            }
+            NumberWidget[bg_state="green"] { 
+                background-color: rgba(0, 255, 0, 0.078); 
+                border-radius: 5px; 
+            }
+            NumberWidget[bg_state="transparent"] { 
+                background-color: transparent; 
+                border-radius: 5px; 
+            }
         """)
+
+    def set_background_color(self, color_name: NumberWidgetBackgroundColor) -> None:
+        if color_name == self.background_color:
+            return
+
+        self.background_color = color_name
+        self.setProperty("bg_state", color_name)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.update()
 
     def _setup_number(self) -> None:
         # Clear previous widgets
