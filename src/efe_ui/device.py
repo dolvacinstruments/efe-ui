@@ -1,4 +1,5 @@
 import logging
+import math
 import random
 import socket
 import threading
@@ -74,6 +75,18 @@ class DeviceSetup:
         setup.current_e = [-100e-6] * CHANNEL_COUNT
 
         return setup
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, DeviceSetup):
+            return NotImplemented
+        return (
+            self.is_disabled == other.is_disabled
+            and self.is_high_range == other.is_high_range
+            and all(float_compare(a, b) for a, b in zip(self.voltage_c, other.voltage_c, strict=True))
+            and all(float_compare(a, b) for a, b in zip(self.current_c, other.current_c, strict=True))
+            and all(float_compare(a, b) for a, b in zip(self.voltage_e, other.voltage_e, strict=True))
+            and all(float_compare(a, b) for a, b in zip(self.current_e, other.current_e, strict=True))
+        )
 
 
 class CathodeState(StrEnum):
@@ -250,16 +263,16 @@ class EFE(QObject):
                     else:
                         self._device.write(f"SOUR{i + 1}:CURR:RANG 1e-6")
                     changes_occured = True
-                if self._setup.voltage_c[i] != self._pending_setup.voltage_c[i]:
+                if not float_compare(self._setup.voltage_c[i], self._pending_setup.voltage_c[i]):
                     self._device.write(f"SOUR{i + 1}:VOLTC {self._pending_setup.voltage_c[i]}")
                     changes_occured = True
-                if self._setup.current_c[i] != self._pending_setup.current_c[i]:
+                if not float_compare(self._setup.current_c[i], self._pending_setup.current_c[i]):
                     self._device.write(f"SOUR{i + 1}:CURRC {self._pending_setup.current_c[i]}")
                     changes_occured = True
-                if self._setup.voltage_e[i] != self._pending_setup.voltage_e[i]:
+                if not float_compare(self._setup.voltage_e[i], self._pending_setup.voltage_e[i]):
                     self._device.write(f"SOUR{i + 1}:VOLTE {self._pending_setup.voltage_e[i]}")
                     changes_occured = True
-                if self._setup.current_e[i] != self._pending_setup.current_e[i]:
+                if not float_compare(self._setup.current_e[i], self._pending_setup.current_e[i]):
                     self._device.write(f"SOUR{i + 1}:CURRE {self._pending_setup.current_e[i]}")
                     changes_occured = True
             if changes_occured:
@@ -283,16 +296,16 @@ class EFE(QObject):
                 if self._setup.is_high_range[i] != self._pending_setup.is_high_range[i]:
                     ret = self._device.query(f"SOUR{i + 1}:CURR:RANG?")
                     self._setup.is_high_range[i] = float(ret.strip()) == 1e-4
-                if self._setup.voltage_c[i] != self._pending_setup.voltage_c[i]:
+                if not float_compare(self._setup.voltage_c[i], self._pending_setup.voltage_c[i]):
                     ret = self._device.query(f"SOUR{i + 1}:VOLTC?")
                     self._setup.voltage_c[i] = float(ret.strip())
-                if self._setup.current_c[i] != self._pending_setup.current_c[i]:
+                if not float_compare(self._setup.current_c[i], self._pending_setup.current_c[i]):
                     ret = self._device.query(f"SOUR{i + 1}:CURRC?")
                     self._setup.current_c[i] = float(ret.strip())
-                if self._setup.voltage_e[i] != self._pending_setup.voltage_e[i]:
+                if not float_compare(self._setup.voltage_e[i], self._pending_setup.voltage_e[i]):
                     ret = self._device.query(f"SOUR{i + 1}:VOLTE?")
                     self._setup.voltage_e[i] = float(ret.strip())
-                if self._setup.current_e[i] != self._pending_setup.current_e[i]:
+                if not float_compare(self._setup.current_e[i], self._pending_setup.current_e[i]):
                     ret = self._device.query(f"SOUR{i + 1}:CURRE?")
                     self._setup.current_e[i] = float(ret.strip())
 
@@ -305,6 +318,14 @@ class EFE(QObject):
         except DeviceDisconnectedError as e:
             self.status_updated.emit(DeviceStatus(DeviceStatusKind.DISCONNECTED, str(e)))
             self._device_connected = False
+
+
+def float_compare(a: float | None, b: float | None) -> bool:
+    if a is None and b is None:
+        return True
+    if a is None or b is None:
+        return False
+    return math.isclose(a, b)
 
 
 class Device(ABC):
