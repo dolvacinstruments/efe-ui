@@ -159,7 +159,6 @@ class ChannelWidget(QWidget):
             measure_widget.hide()
         grid.addWidget(measure_widget, row, 1, alignment=Qt.AlignmentFlag.AlignRight)
 
-        print(config.value)
         set_widget = NumberWidget(
             Value(config.value),
             config.digit_count_set,

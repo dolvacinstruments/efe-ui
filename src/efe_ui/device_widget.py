@@ -102,6 +102,7 @@ class DeviceWidget(QWidget):
 
     @Slot()
     def disconnect_from_device(self) -> None:
+        self._disconnect_button.setText("REMOVING...")
         self.disconnect_requested.emit()
 
     @Slot()
