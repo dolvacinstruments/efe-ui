@@ -22,6 +22,7 @@ REFRESH_INTERVAL_MS = 200
 
 class DeviceStatusKind(StrEnum):
     OK = "OK"
+    SYNCING = "Syncing"
     DISCONNECTED = "Disconnected"
     CONNECTION_ERROR = "Connection Error"
     IO_ERROR = "I/O Error"
@@ -36,6 +37,10 @@ class DeviceStatus:
     @classmethod
     def ok(cls) -> Self:
         return cls(kind=DeviceStatusKind.OK)
+
+    @classmethod
+    def syncing(cls) -> Self:
+        return cls(kind=DeviceStatusKind.SYNCING, message="Syncing...")
 
 
 @dataclass
@@ -155,6 +160,7 @@ class EFE(QObject):
     def tick(self) -> None:
         if self._device_connected:
             self.update_device()
+            self.ensure_setup_synced()
             self.poll_device()
         else:
             logger.info("Device not connected. Attempting to connect...")
@@ -230,39 +236,71 @@ class EFE(QObject):
 
     def update_device(self) -> None:
         try:
+            changes_occured = False
             for i in range(CHANNEL_COUNT):
                 if self._setup.is_disabled[i] != self._pending_setup.is_disabled[i]:
                     if self._pending_setup.is_disabled[i]:
                         self._device.write(f"OUTP{i + 1} OFF")
                     else:
                         self._device.write(f"OUTP{i + 1} ON")
-                    self._setup.is_disabled[i] = self._pending_setup.is_disabled[i]
-
+                    changes_occured = True
                 if self._setup.is_high_range[i] != self._pending_setup.is_high_range[i]:
                     if self._pending_setup.is_high_range[i]:
                         self._device.write(f"SOUR{i + 1}:CURR:RANG 1e-4")
                     else:
                         self._device.write(f"SOUR{i + 1}:CURR:RANG 1e-6")
-                    self._setup.is_high_range[i] = self._pending_setup.is_high_range[i]
-
+                    changes_occured = True
                 if self._setup.voltage_c[i] != self._pending_setup.voltage_c[i]:
                     self._device.write(f"SOUR{i + 1}:VOLTC {self._pending_setup.voltage_c[i]}")
-                    self._setup.voltage_c[i] = self._pending_setup.voltage_c[i]
-
+                    changes_occured = True
                 if self._setup.current_c[i] != self._pending_setup.current_c[i]:
                     self._device.write(f"SOUR{i + 1}:CURRC {self._pending_setup.current_c[i]}")
-                    self._setup.current_c[i] = self._pending_setup.current_c[i]
-
+                    changes_occured = True
                 if self._setup.voltage_e[i] != self._pending_setup.voltage_e[i]:
                     self._device.write(f"SOUR{i + 1}:VOLTE {self._pending_setup.voltage_e[i]}")
-                    self._setup.voltage_e[i] = self._pending_setup.voltage_e[i]
-
+                    changes_occured = True
                 if self._setup.current_e[i] != self._pending_setup.current_e[i]:
                     self._device.write(f"SOUR{i + 1}:CURRE {self._pending_setup.current_e[i]}")
-                    self._setup.current_e[i] = self._pending_setup.current_e[i]
+                    changes_occured = True
+            if changes_occured:
+                self.status_updated.emit(DeviceStatus.syncing())
 
         except DeviceIOError as e:
             logger.error(f"Error occurred while updating device: {e}")
+            self.status_updated.emit(DeviceStatus(DeviceStatusKind.IO_ERROR, str(e)))
+        except DeviceDisconnectedError as e:
+            self.status_updated.emit(DeviceStatus(DeviceStatusKind.DISCONNECTED, str(e)))
+            self._device_connected = False
+
+    def ensure_setup_synced(self) -> None:
+        try:
+            check_needed = self._setup != self._pending_setup
+
+            for i in range(CHANNEL_COUNT):
+                if self._setup.is_disabled[i] != self._pending_setup.is_disabled[i]:
+                    ret = self._device.query(f"OUTP{i + 1}?")
+                    self._setup.is_disabled[i] = int(ret.strip()) == 0
+                if self._setup.is_high_range[i] != self._pending_setup.is_high_range[i]:
+                    ret = self._device.query(f"SOUR{i + 1}:CURR:RANG?")
+                    self._setup.is_high_range[i] = float(ret.strip()) == 1e-4
+                if self._setup.voltage_c[i] != self._pending_setup.voltage_c[i]:
+                    ret = self._device.query(f"SOUR{i + 1}:VOLTC?")
+                    self._setup.voltage_c[i] = float(ret.strip())
+                if self._setup.current_c[i] != self._pending_setup.current_c[i]:
+                    ret = self._device.query(f"SOUR{i + 1}:CURRC?")
+                    self._setup.current_c[i] = float(ret.strip())
+                if self._setup.voltage_e[i] != self._pending_setup.voltage_e[i]:
+                    ret = self._device.query(f"SOUR{i + 1}:VOLTE?")
+                    self._setup.voltage_e[i] = float(ret.strip())
+                if self._setup.current_e[i] != self._pending_setup.current_e[i]:
+                    ret = self._device.query(f"SOUR{i + 1}:CURRE?")
+                    self._setup.current_e[i] = float(ret.strip())
+
+            if check_needed and self._setup == self._pending_setup:
+                self.status_updated.emit(DeviceStatus.ok())
+
+        except DeviceIOError as e:
+            logger.error(f"Error occurred while querying device state: {e}")
             self.status_updated.emit(DeviceStatus(DeviceStatusKind.IO_ERROR, str(e)))
         except DeviceDisconnectedError as e:
             self.status_updated.emit(DeviceStatus(DeviceStatusKind.DISCONNECTED, str(e)))
@@ -370,7 +408,7 @@ class RealDevice(Device):
             raise RuntimeError("Device not initialized.")
         try:
             cmd_bytes = (command + "\n").encode("ascii")
-            logger.info(f"Sending: {command}")
+            logger.info(f"[{self._ip}] Sending: {command}")
             self._send(cmd_bytes)
         except (DeviceDisconnectedError, DeviceIOError):
             raise
@@ -385,7 +423,7 @@ class RealDevice(Device):
             self.write(command)  # write also logs and handles exceptions
             response = self._read_until(b"\n")
             ret = response.decode("ascii").rstrip("\n")
-            logger.info(f"Received: {ret}")
+            logger.info(f"[{self._ip}] Received: {ret}")
             return ret
         except (DeviceDisconnectedError, DeviceIOError):
             raise

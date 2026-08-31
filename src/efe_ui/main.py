@@ -29,7 +29,10 @@ def main() -> None:
     app.setWindowIcon(QIcon(get_icon_path()))
 
     if get_args().debug:
-        logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s - %(levelname)s - %(message)s",
+        )
         app.setStyleSheet("""
             QWidget {
                 border: 1px solid red;

@@ -152,10 +152,16 @@ class DeviceWidget(QWidget):
             return  # No change in status, do nothing
         self._last_status = status
         if status.kind == DeviceStatusKind.OK:
+            self._status_label.setStyleSheet("")
             self._status_label.setText("")
+        elif status.kind == DeviceStatusKind.SYNCING:
+            self._status_label.setStyleSheet("")
+            self._status_label.setText("Syncing...")
         elif status.kind == DeviceStatusKind.DISCONNECTED:
+            self._status_label.setStyleSheet("color: red;")
             self._status_label.setText("Disconnected")
         elif status.kind == DeviceStatusKind.CONNECTION_ERROR:
+            self._status_label.setStyleSheet("color: red;")
             self._status_label.setText(f"Connection Error: {status.message}")
         else:
             if self._msgbox:
