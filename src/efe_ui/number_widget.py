@@ -2,10 +2,10 @@ import math
 from dataclasses import dataclass
 from enum import Enum, auto
 from functools import partial
-from typing import Self, Literal
+from typing import Literal, Self
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QFocusEvent, QKeyEvent
+from PySide6.QtGui import QFocusEvent, QKeyEvent
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
