@@ -1,8 +1,10 @@
 import logging
 import signal
 import sys
+from importlib.resources import files
 
 from PySide6.QtCore import QTimer
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from efe_ui.args import get_args
@@ -15,12 +17,22 @@ def handle_signal(signum: int, _) -> None:  # noqa: ANN001
 
 def main() -> None:
     app = QApplication(sys.argv)
-    app.setApplicationName("EFE-UI")
-    app.setOrganizationName("Dolvac")
+    app.setOrganizationName("Dolvac Instruments")
     app.setOrganizationDomain("dolvac.com")
 
+    if sys.platform == "win32":
+        import ctypes
+
+        app_id = "dolvac.efe_ui"
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
+
+    app.setWindowIcon(QIcon(get_icon_path()))
+
     if get_args().debug:
-        logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s - %(levelname)s - %(message)s",
+        )
         app.setStyleSheet("""
             QWidget {
                 border: 1px solid red;
@@ -40,6 +52,11 @@ def main() -> None:
     timer.timeout.connect(lambda: None)
 
     sys.exit(app.exec())
+
+
+def get_icon_path() -> str:
+    path = files("efe_ui.assets").joinpath("icon.svg")
+    return str(path)
 
 
 if __name__ == "__main__":

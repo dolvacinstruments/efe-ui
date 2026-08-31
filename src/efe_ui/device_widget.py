@@ -7,7 +7,7 @@ from efe_ui.channel_widget import (
     ChannelWidget,
 )
 from efe_ui.constants import CHANNEL_COUNT, VariableType
-from efe_ui.device import EFE, DeviceMeasured, DeviceStatus, DeviceStatusKind
+from efe_ui.device import EFE, CathodeState, DeviceMeasured, DeviceStatus, DeviceStatusKind, ExtractionState
 from efe_ui.number_widget import Value
 from efe_ui.ui_helpers import create_title_bar_button, create_title_bar_label
 
@@ -79,6 +79,11 @@ class DeviceWidget(QWidget):
 
         title_layout.addStretch(1)
 
+        self._lockout_label = create_title_bar_label("LOCKOUT")
+        self._lockout_label.setStyleSheet("color: red;")
+        self._lockout_label.setVisible(False)
+        title_layout.addWidget(self._lockout_label)
+
         self._disconnect_button = create_title_bar_button("REMOVE")
         title_layout.addWidget(self._disconnect_button)
 
@@ -97,6 +102,7 @@ class DeviceWidget(QWidget):
 
     @Slot()
     def disconnect_from_device(self) -> None:
+        self._disconnect_button.setText("REMOVING...")
         self.disconnect_requested.emit()
 
     @Slot()
@@ -106,6 +112,7 @@ class DeviceWidget(QWidget):
 
     @Slot(DeviceMeasured)
     def handle_measured_update(self, measured: DeviceMeasured) -> None:
+        lockout = False
         for i in range(CHANNEL_COUNT):
             channel_widget = self._channel_widgets[i]
             channel_widget.set_measure_value(VariableType.VOLTAGE_C, measured.voltage_c[i])
@@ -113,6 +120,9 @@ class DeviceWidget(QWidget):
             channel_widget.set_measure_value(VariableType.VOLTAGE_E, measured.voltage_e[i])
             channel_widget.set_cathode_state(measured.state_c[i])
             channel_widget.set_extraction_state(measured.state_e[i])
+            if measured.state_c[i] == CathodeState.LOCKOUT or measured.state_e[i] == ExtractionState.LOCKOUT:
+                lockout = True
+        self._lockout_label.setVisible(lockout)
 
     @Slot()
     def handle_force_disable(self) -> None:
@@ -143,10 +153,16 @@ class DeviceWidget(QWidget):
             return  # No change in status, do nothing
         self._last_status = status
         if status.kind == DeviceStatusKind.OK:
+            self._status_label.setStyleSheet("")
             self._status_label.setText("")
+        elif status.kind == DeviceStatusKind.SYNCING:
+            self._status_label.setStyleSheet("")
+            self._status_label.setText("Syncing...")
         elif status.kind == DeviceStatusKind.DISCONNECTED:
+            self._status_label.setStyleSheet("color: red;")
             self._status_label.setText("Disconnected")
         elif status.kind == DeviceStatusKind.CONNECTION_ERROR:
+            self._status_label.setStyleSheet("color: red;")
             self._status_label.setText(f"Connection Error: {status.message}")
         else:
             if self._msgbox:

@@ -18,6 +18,7 @@ class VariableType(Enum):
 @dataclass
 class RowConfig:
     label: str
+    value: float
     unit: str
     minimum: float
     maximum: float
@@ -30,9 +31,10 @@ class RowConfig:
 
 VC_ROW = RowConfig(
     label="V<sub>C</sub>:",
+    value=-5.0,
     unit="V",
-    minimum=-2000.0,
-    maximum=200,
+    minimum=-1200.0,
+    maximum=-5,
     digit_count_measure=5,
     digit_count_set=4,
     point_position_measure=1,
@@ -41,9 +43,10 @@ VC_ROW = RowConfig(
 
 VE_ROW = RowConfig(
     label="V<sub>E</sub>:",
+    value=-5.0,
     unit="V",
-    minimum=-2000.0,
-    maximum=200,
+    minimum=-1200.0,
+    maximum=-5,
     digit_count_measure=5,
     digit_count_set=4,
     point_position_measure=1,
@@ -52,9 +55,10 @@ VE_ROW = RowConfig(
 
 IC_HIGH_ROW = RowConfig(
     label="I<sub>C</sub>:",
+    value=0.0,
     unit="μA",
-    minimum=-200.0,
-    maximum=20,
+    minimum=-100.0,
+    maximum=0,
     digit_count_measure=5,
     digit_count_set=4,
     point_position_measure=2,
@@ -63,9 +67,10 @@ IC_HIGH_ROW = RowConfig(
 
 IC_LOW_ROW = RowConfig(
     label="I<sub>C</sub>:",
+    value=0.0,
     unit="μA",
-    minimum=-2.0,
-    maximum=2,
+    minimum=-1.0,
+    maximum=0,
     digit_count_measure=5,
     digit_count_set=4,
     point_position_measure=4,
@@ -74,9 +79,10 @@ IC_LOW_ROW = RowConfig(
 
 IE_HIGH_ROW = RowConfig(
     label="I<sub>E</sub>:",
+    value=-100.0,
     unit="μA",
-    minimum=-200.0,
-    maximum=20,
+    minimum=-100.0,
+    maximum=0,
     digit_count_measure=5,
     digit_count_set=4,
     point_position_measure=2,
@@ -86,9 +92,10 @@ IE_HIGH_ROW = RowConfig(
 
 IE_LOW_ROW = RowConfig(
     label="I<sub>E</sub>:",
+    value=-1.0,
     unit="μA",
-    minimum=-2.0,
-    maximum=2,
+    minimum=-1.0,
+    maximum=0,
     digit_count_measure=5,
     digit_count_set=4,
     point_position_measure=4,
