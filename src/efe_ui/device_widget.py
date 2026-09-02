@@ -129,23 +129,20 @@ class DeviceWidget(QWidget):
         for i in range(CHANNEL_COUNT):
             self._channel_widgets[i].set_is_disabled(True)
 
-    @Slot(VariableType, float, int)
-    def set_set_value(self, variable_type: VariableType, value: float, channel: int) -> None:
-        if channel < 0 or channel >= CHANNEL_COUNT:
-            raise ValueError(f"Channel {channel} is out of range. Must be between 0 and {CHANNEL_COUNT - 1}.")
-        self._channel_widgets[channel].set_set_value(variable_type, Value(value))
+    @Slot(VariableType, float)
+    def set_set_value(self, variable_type: VariableType, value: float) -> None:
+        for ch in self._channel_widgets:
+            ch.set_set_value(variable_type, Value(value))
 
-    @Slot(bool, int)
-    def set_is_disabled(self, is_disabled: bool, channel: int) -> None:
-        if channel < 0 or channel >= CHANNEL_COUNT:
-            raise ValueError(f"Channel {channel} is out of range. Must be between 0 and {CHANNEL_COUNT - 1}.")
-        self._channel_widgets[channel].set_is_disabled(is_disabled)
+    @Slot(bool)
+    def set_is_disabled(self, is_disabled: bool) -> None:
+        for ch in self._channel_widgets:
+            ch.set_is_disabled(is_disabled)
 
-    @Slot(bool, int)
-    def set_is_high_range(self, is_high_range: bool, channel: int) -> None:
-        if channel < 0 or channel >= CHANNEL_COUNT:
-            raise ValueError(f"Channel {channel} is out of range. Must be between 0 and {CHANNEL_COUNT - 1}.")
-        self._channel_widgets[channel].set_is_high_range(is_high_range)
+    @Slot(bool)
+    def set_is_high_range(self, is_high_range: bool) -> None:
+        for ch in self._channel_widgets:
+            ch.set_is_high_range(is_high_range)
 
     @Slot(DeviceStatus)
     def update_device_status(self, status: DeviceStatus) -> None:

@@ -238,7 +238,7 @@ class ChannelWidget(QWidget):
         elif state == CathodeState.UNSTABLE:
             self.vc_set_widget.set_background_color("red")
             self.ic_set_widget.set_background_color("red")
-        elif state == CathodeState.OFF or state == CathodeState.ERROR:
+        elif state in [CathodeState.OFF, CathodeState.ERROR, CathodeState.LOCKOUT]:
             self.vc_set_widget.set_background_color("transparent")
             self.ic_set_widget.set_background_color("transparent")
 
@@ -249,10 +249,10 @@ class ChannelWidget(QWidget):
         elif state == ExtractionState.CC:
             self.ve_set_widget.set_background_color("transparent")
             self.ie_set_widget.set_background_color("green")
-        elif state == ExtractionState.EKV or state == ExtractionState.OFF:
+        elif state in [ExtractionState.EKV, ExtractionState.OFF, ExtractionState.ERROR, ExtractionState.LOCKOUT]:
             self.ve_set_widget.set_background_color("transparent")
             self.ie_set_widget.set_background_color("transparent")
-        elif state == ExtractionState.UNSTABLE or state == ExtractionState.ERROR:
+        elif state == ExtractionState.UNSTABLE:
             self.ve_set_widget.set_background_color("red")
             self.ie_set_widget.set_background_color("red")
 

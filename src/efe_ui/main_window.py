@@ -1,17 +1,17 @@
 import json
-from functools import partial
 from pathlib import Path
 
 from platformdirs import user_data_dir
 from pydantic import ValidationError
-from PySide6.QtCore import QObject, QSize, Qt, QThread, QTimer
-from PySide6.QtGui import QAction
+from PySide6.QtCore import QObject, QSize, Qt, QThread, QTimer, QUrl
+from PySide6.QtGui import QAction, QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractScrollArea,
     QDialog,
     QHBoxLayout,
     QMainWindow,
     QMessageBox,
+    QPushButton,
     QScrollArea,
     QSizePolicy,
     QVBoxLayout,
@@ -22,7 +22,6 @@ from efe_ui.add_device_dialog import AddDeviceDialog
 from efe_ui.args import get_args
 from efe_ui.channel_widget import ChannelWidget
 from efe_ui.config import DevicesConfig
-from efe_ui.constants import CHANNEL_COUNT
 from efe_ui.device_logs import DeviceLogs
 from efe_ui.device_widget import DeviceWidget
 from efe_ui.load_devices_dialog import LoadDevicesDialog
@@ -56,8 +55,17 @@ class MainWindow(QMainWindow):
 
         self.add_device_area(layout)
 
+        right_bar = QVBoxLayout()
+        right_bar.setContentsMargins(0, 32, 0, 0)
+        right_bar.setSizeConstraint(QVBoxLayout.SizeConstraint.SetMinimumSize)
+        layout.addLayout(right_bar)
+
         self._global_widget = ChannelWidget("Global", write_only=True)
-        layout.addWidget(self._global_widget, alignment=Qt.AlignmentFlag.AlignHCenter)
+        right_bar.addWidget(self._global_widget, alignment=Qt.AlignmentFlag.AlignTop)
+
+        help_button = QPushButton("User manual", self)
+        help_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://manuals.dolvac.com")))
+        right_bar.addWidget(help_button, alignment=Qt.AlignmentFlag.AlignBottom)
 
         layout.addStretch(1)
 
@@ -121,10 +129,9 @@ class MainWindow(QMainWindow):
         self.scroll_area.updateGeometry()
         device_widget.destroyed.connect(self.handle_destroyed)
 
-        for i in range(CHANNEL_COUNT):
-            self._global_widget.is_disabled_changed.connect(partial(device_widget.set_is_disabled, channel=i))
-            self._global_widget.is_high_range_changed.connect(partial(device_widget.set_is_high_range, channel=i))
-            self._global_widget.value_changed.connect(partial(device_widget.set_set_value, channel=i))
+        self._global_widget.is_disabled_changed.connect(device_widget.set_is_disabled)
+        self._global_widget.is_high_range_changed.connect(device_widget.set_is_high_range)
+        self._global_widget.value_changed.connect(device_widget.set_set_value)
 
         self.save_auto_config()
 
