@@ -3,14 +3,15 @@ from pathlib import Path
 
 from platformdirs import user_data_dir
 from pydantic import ValidationError
-from PySide6.QtCore import QObject, QSize, Qt, QThread, QTimer
-from PySide6.QtGui import QAction
+from PySide6.QtCore import QObject, QSize, Qt, QThread, QTimer, QUrl
+from PySide6.QtGui import QAction, QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractScrollArea,
     QDialog,
     QHBoxLayout,
     QMainWindow,
     QMessageBox,
+    QPushButton,
     QScrollArea,
     QSizePolicy,
     QVBoxLayout,
@@ -54,8 +55,17 @@ class MainWindow(QMainWindow):
 
         self.add_device_area(layout)
 
+        right_bar = QVBoxLayout()
+        right_bar.setContentsMargins(0, 32, 0, 0)
+        right_bar.setSizeConstraint(QVBoxLayout.SizeConstraint.SetMinimumSize)
+        layout.addLayout(right_bar)
+
         self._global_widget = ChannelWidget("Global", write_only=True)
-        layout.addWidget(self._global_widget, alignment=Qt.AlignmentFlag.AlignHCenter)
+        right_bar.addWidget(self._global_widget, alignment=Qt.AlignmentFlag.AlignTop)
+
+        help_button = QPushButton("User manual", self)
+        help_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://manuals.dolvac.com")))
+        right_bar.addWidget(help_button, alignment=Qt.AlignmentFlag.AlignBottom)
 
         layout.addStretch(1)
 
