@@ -282,7 +282,7 @@ ROW_LABEL_WIDTH: int | None = None
 def _get_row_label_width() -> int:
     global ROW_LABEL_WIDTH
     if ROW_LABEL_WIDTH is None:
-        label = QLabel("V<sub>C</sub>:")
+        label = QLabel("V<sub>K</sub>:")
         font = label.font()
         font.setPointSize(DIGIT_FONT_SIZE)
         label.setFont(font)
