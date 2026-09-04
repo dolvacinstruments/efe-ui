@@ -30,7 +30,7 @@ class RowConfig:
 
 
 VC_ROW = RowConfig(
-    label="V<sub>C</sub>:",
+    label="V<sub>K</sub>:",
     value=-5.0,
     unit="V",
     minimum=-1200.0,
@@ -54,7 +54,7 @@ VE_ROW = RowConfig(
 )
 
 IC_HIGH_ROW = RowConfig(
-    label="I<sub>C</sub>:",
+    label="I<sub>K</sub>:",
     value=0.0,
     unit="μA",
     minimum=-100.0,
@@ -66,7 +66,7 @@ IC_HIGH_ROW = RowConfig(
 )
 
 IC_LOW_ROW = RowConfig(
-    label="I<sub>C</sub>:",
+    label="I<sub>K</sub>:",
     value=0.0,
     unit="μA",
     minimum=-1.0,
