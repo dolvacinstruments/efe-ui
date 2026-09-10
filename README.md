@@ -2,7 +2,7 @@
 
 Graphical user interface for the EFE1201-4 used in Infascope system.
 
-![Front panel](./images/ui_main.jpg)
+![UI](./images/ui_main.png)
 
 ## EFE1201-4
 
